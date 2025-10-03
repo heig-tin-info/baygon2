@@ -29,6 +29,7 @@ MINIMAL = {
 # Core happy-paths
 # ---------------------------------------------------------------------------
 
+
 def test_minimal_spec_valid():
     spec = normalize_spec(MINIMAL)
     assert isinstance(spec, Spec)
@@ -79,7 +80,12 @@ def test_checks_compact_vs_canonical_and_numbers():
                 "name": "t",
                 "stdout": [
                     {"contains": "Version"},
-                    {"contains": {"value": "Build", "explain": "doit mentionner Build"}},
+                    {
+                        "contains": {
+                            "value": "Build",
+                            "explain": "doit mentionner Build",
+                        }
+                    },
                     {"equals": 42},
                     {"lt": 3.5},
                     {"gte": {"value": 1, "explaination": ">=1"}},
@@ -94,7 +100,7 @@ def test_checks_compact_vs_canonical_and_numbers():
     assert kinds == ["contains", "contains", "equals", "lt", "gte", "check_eval"]
     # coercions
     assert sops[2].value == "42"  # equals → string coercion
-    assert sops[3].value == 3.5    # lt → float coercion
+    assert sops[3].value == 3.5  # lt → float coercion
     assert sops[4].explain == ">=1"  # explaination alias
 
 
@@ -223,6 +229,7 @@ def test_setup_teardown_and_repeat_and_exit():
 # Error paths
 # ---------------------------------------------------------------------------
 
+
 def test_unknown_filter_error():
     data = {
         **MINIMAL,
@@ -250,9 +257,12 @@ def test_stream_item_must_be_single_key_object():
     data = {
         **MINIMAL,
         "tests": [
-            {"name": "t", "stdout": [
-                {"contains": "A", "equals": "B"},  # deux clés -> erreur
-            ]},
+            {
+                "name": "t",
+                "stdout": [
+                    {"contains": "A", "equals": "B"},  # deux clés -> erreur
+                ],
+            },
         ],
     }
     with pytest.raises(ValidationError) as ei:

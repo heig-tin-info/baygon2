@@ -16,6 +16,7 @@ Points clés:
 - On **évite les revalidations Pydantic** en stockant des objets déjà normalisés
   (les champs `stdout`/`stderr`/`filters`/`files.*.ops` sont typés `List[Any]`).
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
@@ -58,6 +59,7 @@ def _as_str_list(v: Any) -> List[str]:
 # ---------------------------------------------------------------------------
 # Filters
 # ---------------------------------------------------------------------------
+
 
 class FilterBase(BaseModel):
     kind: Literal["trim", "lower", "upper", "sub", "map_eval"]
@@ -134,6 +136,7 @@ def parse_filter(obj: Any) -> Filter:
 # ---------------------------------------------------------------------------
 # Checks
 # ---------------------------------------------------------------------------
+
 
 class CheckBase(BaseModel):
     kind: Literal[
@@ -359,6 +362,7 @@ def parse_stream_ops(seq: Any) -> List[StreamOp]:
 # Exécution / Contexte
 # ---------------------------------------------------------------------------
 
+
 class ExecConfig(BaseModel):
     cmd: Union[str, List[str]]
     timeout: Optional[float] = None
@@ -397,12 +401,15 @@ class SetupStep(BaseModel):
             k, val = next(iter(v.items()))
             if k in ("run", "eval"):
                 return {"kind": k, "value": str(val)}
-        raise TypeError("Une étape de setup/teardown doit être { run: ... } ou { eval: ... }")
+        raise TypeError(
+            "Une étape de setup/teardown doit être { run: ... } ou { eval: ... }"
+        )
 
 
 # ---------------------------------------------------------------------------
 # TestCase & FileSpec
 # ---------------------------------------------------------------------------
+
 
 class FileSpec(BaseModel):
     # Objets déjà normalisés → éviter revalidation
@@ -422,7 +429,7 @@ class FileSpec(BaseModel):
                 filters = parse_stream_ops(v.get("filters") or [])
                 checks = parse_stream_ops(v.get("checks") or [])
                 return {"ops": [*filters, *checks]}
-        raise ValueError("files.<name> doit être une liste d'opérations ou {ops:[...]}" )
+        raise ValueError("files.<name> doit être une liste d'opérations ou {ops:[...]}")
 
 
 class TestCase(BaseModel):
@@ -471,7 +478,9 @@ class TestCase(BaseModel):
         if "setup" in v:
             v["setup"] = [SetupStep.model_validate(x) for x in (v.get("setup") or [])]
         if "teardown" in v:
-            v["teardown"] = [SetupStep.model_validate(x) for x in (v.get("teardown") or [])]
+            v["teardown"] = [
+                SetupStep.model_validate(x) for x in (v.get("teardown") or [])
+            ]
         return v
 
 
@@ -481,6 +490,7 @@ TestCase.model_rebuild()
 # ---------------------------------------------------------------------------
 # Racine
 # ---------------------------------------------------------------------------
+
 
 class Spec(BaseModel):
     version: int = 1
@@ -504,6 +514,7 @@ class Spec(BaseModel):
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
+
 
 def normalize_spec(data: Dict[str, Any]) -> Spec:
     """Valide et normalise un dict (issu YAML/JSON) vers un modèle **canonique**.
