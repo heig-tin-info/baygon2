@@ -73,6 +73,7 @@ validation:
 #   - 'https://samuelcolvin.github.io/mkdocs-run-code/run_code_main.js'
 
 nav:
+  - Home: index.md
   - Documentation:
       - getting-started.md
       - syntax.md
@@ -99,7 +100,7 @@ markdown_extensions:
       alternate_style: true
 
 watch:
-  - baygon
+  - src/baygon
 
 plugins:
   - social

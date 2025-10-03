@@ -1,39 +1,45 @@
 # Scripting
 
-Baygon is meant to be used as a standalone program to test other programs using a configuration file. However, you can also use Baygon as a library to write your own test runner.
+Baygon ships as a CLI, but its parser is intentionally reusable from Python.
+Two helper modules are exposed:
 
-Here is an example of a test runner using Baygon:
+* `baygon.loader` – parse YAML/JSON files with friendly error messages.
+* `baygon.schema` – validate and normalize the resulting dictionary.
 
 ```python
 from pathlib import Path
-import baygon
+from baygon.loader import load_file
+from baygon.schema import normalize_spec
 
-ts = baygon.TestSuite({
-        'filters': {'uppercase': True},
-        'tests': [{
-            'args': ['--version'],
-            'stderr': [{'contains': 'VERSION'}]
-        }]
-    }, executable=Path('myapp'))
-t = ts.run()
+raw = load_file(Path("tests.yml"))
+spec = normalize_spec(raw)
 
-assert(t, [[]])
+for suite in spec.tests:
+    print(suite.name, suite.args)
 ```
 
-## Validation
+`normalize_spec` returns a Pydantic model.  All collections are normalized: for
+instance `args` is guaranteed to be a list of strings, stream operations are
+already parsed into filter/check objects, and files are represented by
+`FileSpec` instances.
 
-You can validate a Baygon configuration file with the `baygon.Schema` function:
+## Validating ad-hoc documents
+
+If you receive a configuration from an untrusted source you can still use the
+same API:
 
 ```python
-import baygon
+from pydantic import ValidationError
+from baygon.schema import normalize_spec
 
-data = baygon.Schema({
-    'version': 1,
-    'tests': [{
-        'name': 'Test',
-        'exit': 0
-    }]
-})
-
-assert(data['version'], 1)
+def validate_config(data: dict) -> bool:
+    try:
+        normalize_spec(data)
+    except ValidationError:
+        return False
+    return True
 ```
+
+The resulting models are regular Pydantic objects, so you can convert them back
+to dictionaries with `.model_dump()` if you need to serialise the canonical
+form.

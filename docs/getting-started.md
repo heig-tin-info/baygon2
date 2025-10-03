@@ -58,11 +58,12 @@ tests:
         exit: 1
   - name: Stdout is the sum of arguments
     args: [1, 2]
-    stdout: []
+    stdout:
+      - equals: "3"
   - name: Version on stderr
     args: ['--version']
     stderr:
-      - regex: '\b\d\.\d\.\d\b'
+      - match: 'm/\b\d\.\d\.\d\b/'
       - contains: 'Version'
 ```
 

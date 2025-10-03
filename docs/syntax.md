@@ -1,446 +1,254 @@
-# Config File Syntax
+# DSL reference
 
-## Schema version
-
-The schema version is the first key of the configuration file. It is mandatory the version is the baygon version. Syntax API might be incompatible between major versions. The following is a minimal example composed of 1 test which tests if the output is 3 when the binary is run with two arguments `1` and `2`:
+Baygon's test specifications are written in YAML or JSON using a declarative DSL.  A
+specification is a tree: global settings apply to every child node, while each
+group or test case can override or extend them.
 
 ```yaml
-version: 1.0 # Can use semantic versioning
+version: 1
+exec:
+  cmd: ./a.out
+  timeout: 5
+filters:
+  - trim: {}
+  - sub: "s/\s+/ /g"
 tests:
-  - args: [1, 2]
-    stdout: 3
+  - name: Arguments check
+    tests:
+      - name: Two numbers succeed
+        args: [1, 2]
+        exit: 0
+      - name: Missing argument fails
+        args: [1]
+        exit: 1
+  - name: Sum appears on stdout
+    args: [1, 2]
+    stdout:
+      - contains: "3"
 ```
+
+## Root keys
+
+* **`version`** – schema version, currently `1`.
+* **`exec`** – mandatory execution context.  All tests inherit it unless they
+  provide their own values.
+* **`filters`** – optional list of output filters applied to every stream of
+  every test.
+* **`tests`** – list of suites or leaf test cases.
+
+### Execution context (`exec`)
+
+```yaml
+exec:
+  cmd: ./app
+  timeout: 5          # seconds (float accepted)
+  stdin: "42\n"       # string or list of strings
+  args: [--mode, fast] # always coerced to strings
+  env: { DEBUG: "1" }
+  cwd: ./build
+  shell: false
+```
+
+Child suites inherit the execution context and may override specific fields.
+
+## Inheritance model
+
+Settings flow down the tree:
+
+* `filters`, `setup`, `teardown`, `stdin`, `args`, and `env` defined on a parent
+  are merged into descendants.
+* Streams (`stdout`, `stderr`, `files`) are **not** inherited – they only apply
+  to the node where they are declared.
 
 ## Filters
 
-Filters can be applied to all outputs (`stdout`, `stderr`) of every tests. The following filters are available:
+Filters transform stream data before checks are executed.  Each filter is
+represented as a single-key object.  The following filters are available:
 
-`uppercase`
+| Filter      | Effect |
+| ----------- | ------ |
+| `trim`      | Strip leading/trailing whitespace on every line. |
+| `lower`     | Force lowercase. |
+| `upper`     | Force uppercase. |
+| `sub`       | Apply a regular-expression substitution. |
+| `map_eval`  | Evaluate a safe Python expression to transform the value. |
 
-:   All outputs are transformed into uppercase.
-
-    ```yaml
-    filters:
-      - uppercase: true
-    ```
-
-`lowercase`
-
-:   All outputs are transformed into lowercase.
-
-    ```yaml
-    filters:
-      - lowercase: true
-    ```
-
-`trim`
-
-:   All outputs are trimmed (spaces are removed from both ends), on each line
-
-    ```yaml
-    filters:
-      - trim: true
-    ```
-
-`chomp`
-
-:   Trailings newlines are removed from all outputs.
-
-    ```yaml
-    filters:
-      - chomp: true
-    ```
-
-`stripall`
-
-:   All spaces are removed from all outputs.
-
-    ```yaml
-    filters:
-      - stripall: true
-    ```
-
-`regex`
-
-:   A remplacement is made using regular expressions. Multiple forms are accepted. Either a PCRE expression or a search and replace form.
-
-    ```yaml
-    filters:
-      # PCRE expression
-      - regex: 's/foo(bar)?/bar/g'
-      # Search and replace form
-      - regex:
-        search: foo(bar)?
-        replace: bar
-      # Search and replace in an array
-      - regex: [foo(bar)?, bar]
-    ```
-
-`replace`
-
-:   A remplacement is made using a string.
-
-    ```yaml
-    filters:
-      - replace:
-        search: foo
-        replace: bar
-      - replace: [foo, bar]
-    ```
-
-Multiple filters can be applied at the same time:
+Examples:
 
 ```yaml
-version: 1
 filters:
-  - lowercase: true
-  - regex: [foo(bar)?, bar]
-tests:
-  - args: [1, 2]
-    stdout: 3
+  - trim: {}
+  - lower: {}
+  - sub: "s/\s+/ /g"        # Perl-like syntax
+  - sub:
+      regex: "[0-9]+"
+      repl: "<num>"
+      flags: "i"
+  - map_eval: "value.replace('error', 'warning')"
 ```
 
-Filters can also be applied at any level (root, group, test), they override the previous definitions:
+## Stream operations
+
+`stdout`, `stderr`, and every entry under `files` accept a **list of
+operations**.  The list can mix filters and checks.  Items are executed in order
+from top to bottom.
 
 ```yaml
-version: 1
-tests:
-  - args: [1, 2]
-    stdout:
-      - contains: foo
-      - regex: f(oo|aa|uu)
-    filters:
-      - lowercase: true
+stdout:
+  - trim: {}
+  - match: "m/^result:/i"
+  - contains:
+      value: "success"
+      explain: "The tool must announce success"
 ```
 
-Or even at a stream output level:
+`files` use the same format.  Declaring a file implies that it must exist:
 
 ```yaml
-stdout: [{ filters: [ trim: true ], equals: 3 }]
+files:
+  report.json:
+    - trim: {}
+    - match: "m/\"status\": \"ok\"/"
 ```
 
-## Naming
+## Checks
 
-Tests and groups can be optionally named:
+The DSL ships with a concise set of checks:
+
+| Check          | Description |
+| -------------- | ----------- |
+| `match`        | Regular-expression match.  Supports `m/.../flags` syntax. |
+| `contains`     | The stream must contain the string. |
+| `not_contains` | The stream must not contain the string. |
+| `equals`       | Exact string comparison. |
+| `not_equals`   | String inequality. |
+| `lt`, `lte`, `gt`, `gte` | Numerical comparisons (values coerced to floats). |
+| `check_eval`   | Evaluate a Python expression returning `True`.  The stream
+  value is exposed as `value`. |
+| `capture`      | Capture a regex group and run more checks on it. |
+
+### Regular expressions
+
+`match` accepts plain PCRE-compatible patterns or the Perl-like `m/.../flags`
+form.  Flags follow Python's `re` module semantics (`i`, `m`, `s`, `x`, ...).
 
 ```yaml
-version: 1
-tests:
-  - name: Test functionality of the additionner
-    args: [--add, 40, 2]
-    stdout: 42
-  - name: Test error if less than two arguments
-    args: []
-    exit: 2
+stderr:
+  - match: "m/^Version (?P<v>\d+\.\d+)/i"
 ```
 
-## Groups and subgroups
+### Numeric comparisons
 
-Tests can be grouped into hierarchical sub sections, by nesting each test into categories:
+Values provided to numeric comparators are coerced to floats, allowing compact
+notation:
 
 ```yaml
-version: 1
-tests:
-  - name: Category 1
-    tests:
-      - args: [1, 2]
-        stdout: 3
-  - name: Category 2
-    tests:
-      - name: Subcategory 1
-        tests:
-          - args: [1, 2]
-            stdout: 3
+stdout:
+  - capture:
+      regex: "m/score: (?P<value>\d+(?:\.\d+)?)"  # flags optional
+      tests:
+        - gte: 10
+        - lt: 20
+```
+
+### Capture blocks
+
+`capture` extracts a regex group (default group `1`) and executes additional
+checks on the captured value:
+
+```yaml
+stdout:
+  - capture:
+      regex: "m/Duration: (\d+\.\d+)s/"
+      tests:
+        - lt:
+            value: 0.5
+            explain: "Execution should remain fast"
+```
+
+### Evaluated expressions
+
+`check_eval` is the assertion counterpart to `map_eval`.  The special variable
+`value` contains the current stream value:
+
+```yaml
+stdout:
+  - check_eval:
+      expr: "'error' not in value.lower()"
+      explain: "The program must stay quiet"
+```
+
+## Setup and teardown hooks
+
+Each suite or test can declare hooks.  Hooks inherit and extend those of their
+parents.
+
+```yaml
+setup:
+  - run: "./prepare-fixtures.sh"
+  - eval: "ctx['tmpdir'] = mkdtemp()"
+teardown:
+  - run: "rm -rf {tmpdir}"
+```
+
+A hook is either `{ run: "command" }` or `{ eval: "python" }`.
+
+## Repeating tests
+
+`repeat` duplicates a test in the same context.  Hooks run before the first
+iteration and after the last one.
+
+```yaml
+- name: Retry download
+  repeat: 5
+  stdout:
+    - contains: "200 OK"
+```
+
+## Filesystem assertions
+
+When `files` are declared, Baygon reads the target files after the program
+finishes.  Filters and checks work exactly like on `stdout` or `stderr`.
+
+```yaml
+files:
+  "logs/app.log":
+    - trim: {}
+    - not_contains: "Traceback"
 ```
 
 ## Exit status
 
-The exit status can be checked with the `exit` key followed with a 8-bit integer. The following checks if the program returns 0
+Use `exit` to assert the program's return code.  Integers are coerced to the
+`0–255` POSIX range; hexadecimal strings are accepted.
 
 ```yaml
-version: 1
-tests:
-  - exit: 154
-  - exit: 0x9a
-  - exit: Oo232
-  - exit: -102
+exit: 0
 ```
 
-The value can be expressed in unsigned, signed or hexadecimal form. Baygon automatically interprets the value in unsigned form (0 to 255).
-
-You may want to test ranges of exit status:
+For more advanced logic, mix numeric comparisons:
 
 ```yaml
-version: 1
-tests:
-  - exit:
-      - gt: 0  # Greater than 0
-      - '>': 0
-
-      - lt: 255 # Less than 255
-      - '<': 255
-
-      - gte: 0 # Greater or equal to 0
-      - '>=': 0
-
-      - lte: 255 # Less or equal to 255
-      - '<=': 255
+exit:
+  - gte: 0
+  - lt: 64
 ```
 
-In POSIX some exit status are used for specific purposes.
+## Inlining commands and arguments
 
-| Signal  | Signification            | Exit Status |
-| ------- | ------------------------ | ----------- |
-| SIGHUP  | Hangup                   | 129         |
-| SIGINT  | Interrupt                | 130         |
-| SIGQUIT | Quit                     | 131         |
-| SIGILL  | Illegal instruction      | 132         |
-| SIGABRT | Aborted                  | 134         |
-| SIGFPE  | Floating point exception | 136         |
-| SIGKILL | Killed                   | 137         |
-| SIGSEGV | Segmentation fault       | 139         |
-| SIGTERM | Terminated               | 143         |
-
-## Checking outputs
-
-Both `stdout` and `stderr` can be tested against multiple conditions:
+`stdin` accepts a string or a list of lines.  `args` always becomes a list of
+strings, which means integers or booleans are automatically coerced:
 
 ```yaml
-tests:
-  - stdout:
-      - contains: foo # Must contain the word foo
-      - regex: f(oo|aa|uu) # Must match
-    stderr:
-      - equals: foobar # Must be exactly equal to foobar
+stdin:
+  - "first line\n"
+  - "second line\n"
+args: [42, true, "--verbose"]
 ```
 
-The available conditions are:
-
-`contains`
-
-:   The output must contain the string.
-
-    ```yaml
-    stdout:
-      - contains: foo
-    ```
-
-`regex`
-
-:   The output must match the regular expression.
-
-    ```yaml
-    stdout:
-      - regex: f(oo|aa|uu)
-    ```
-
-`equals`
-
-:   The output must be strictly equal to the string.
-
-    ```yaml
-    stdout:
-      - equals: foobar
-    ```
-
-`negate`
-
-:   This is a special condition that negates the following condition. It is useful when you want to negate a condition that is not available. For example, you want to test if the output does not contain a string:
-
-    ```yaml
-    stdout:
-      - negate:
-        - contains: foo
-    ```
-
-## Executable
-
-Baygon allows for specifying the executable to run either from the command line or from the configuration file. You may specify an executable at any level (root, group, test). The only condition is that an executable must be specified before any test.
-
-```yaml
-tests:
-  - name: Test ./foo
-    executable: ./foo
-    stdout: I am Foo
-  - name: Test ./bar
-    executable: ./bar
-    stderr: I am bar
-  - name: Group
-    executable: ./baz
-    tests:
-      - name: Test 1
-        exit: 0
-```
-
-The executable is therefore propagated through the test tree, but you cannot override it. Thus, the following is invalid:
-
-```yaml
-tests:
-  - executable: ./foo
-    tests:
-      - executable: ./bar
-```
-
-One common approach is to name the executable at the top level:
-
-```yaml
-version: 1
-executable: ./foobar
-tests:
-  - name: Test ./foobar
-    exit: 0
-```
-
-Or even from the shell:
-
-```console
-baygon ./foobar
-```
-
-!!! note
-
-    The current working directory `cwd` is the directory of the config file, except if you specify the executable from the shell. In this case the working directory is the current directory.
-
-### Environment variables
-
-You can specify environment variables for the executable at any level:
-
-```yaml
-env: [FOO=bar, BAR=foo]
-```
-
-### TTY
-
-Some programs behave differently when they are run in a TTY. You can specify the `tty` key to run the program in a TTY. By default, the program is run in a non-TTY environment.
-
-```yaml
-tty: true
-```
-
-### Timeout
-
-You can specify a timeout for the executable. The timeout is in seconds.
-
-```yaml
-timeout: 5
-```
-
-### Arguments
-
-You can specify arguments for the executable. The arguments are passed as an array.
-
-```yaml
-args: [1, 2]
-```
-
-### Input
-
-You can specify an input for the executable. The input is either a string or a file.
-
-```yaml
-input: 'foo bar'
-```
-
-```yaml
-input:
-  file: input.txt
-```
-
-The working directory is the directory of the configuration file or the one specified with `cwd`.
-
-## Configuration file
-
-When running `Baygon` without specifying a configuration file, it will look for a file named `baygon.yml` recursively in the current directory and its parents. If no file is found an error is raised.
-
-You can specify a different file with the `-c` or `--config` option:
-
-```console
-baygon --config other.yaml
-```
-
-You are flexible in the format of the configuration file. The following formats are supported:
-
-```text
-baygon.yml
-baygon.yaml
-baygon.json
-```
-
-!!! note
-
-    The names `t.json`, `tests.json` are now deprecated, use `baygon.json` instead.
-
-## Loops and expressions
-
-If the `eval` mode is enabled, you can use loops and expressions in the configuration file. The following is an example of a loop that runs the program with arguments from 1 to 10:
-
-```yaml
-version: 1
-eval: true
-tests:
-  - args: ['{{i = iter(1, 10)}}']
-    stdout: '{{i}}'
-```
-
-The test will be executed 10 times, from 1 to 10 and the output is checked against the value of `i`.
-
-The `eval` option will search for mustaches `{{` and `}}` and evaluate the expression inside. You can use standard arithmetic operators and functions. The following iterators are available:
-
-`iter(start, end, step=1)`
-
-:   Starts a new iterator for this test and returns the current value. The iterator is incremented by `step` at each iteration.
-
-    ```yaml
-    args: ['{{i = iter(1, 10)}}'] # For integers
-    args: ['{{i = iter(1.0, 10.0, 0.5)}}'] # For floats
-    args: ['{{i = iter("a", "z")}}'] # For characters
-    args: ['{{i = iter([4, 8, 15, 16, 23, 42])}}'] # For arrays
-    ```
-
-`rand(min, max, iterations=1, seed=0)`
-
-:   Returns a random number between `min` and `max`.
-
-    ```yaml
-    args: ['{{i = rand(1, 10, 10)}}'] # 10 random numbers between 1 and 10
-    ```
-
-You can use complex expressions such as:
-
-```yaml
-args: ['{{a = iter(-10, 10)}}', '{{b = iter(-10, 10)}}']
-filters:
-  - chomp: true
-stdout: '{{a}} + {{b}} = {{a + b}}'
-```
-
-The math functions available are:
-
-```text
-sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, sqrt, exp, log, log10, log2, pow, ceil, floor, round, abs, min, max, std, median, sum
-```
-
-Behind the scenes, Baygon uses an isolated environment to evaluate the expressions. You may want to add your own functions instead of `eval`:
-
-```yaml
-eval:
- - from statistics import mean
- - from math import sqrt
-```
-
-### Custom initialization
-
-You can specify custom initialization code that is run before the tests. The code is run in the same environment as the expressions.
-
-```yaml
-eval:
-  start: '{{'
-  end: '}}'
-  init: |
-    def foo(x):
-        return x + 1
-```
-
-The code is run before each tests.
-
-You can redefine the start and end delimiters if you want to.
+## Templates and future extensions
+
+The DSL is designed to stay concise.  Complex transforms should rely on
+`map_eval` (for rewriting) or `check_eval` (for assertions).  Upcoming features,
+like templated iterators and richer math helpers, will build on the same
+foundations described above.
