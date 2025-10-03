@@ -142,7 +142,9 @@ def load_text(text: str, *, source: str | None = None, format: Format = "auto") 
     raise ValueError(f"Format inconnu: {format}")
 
 
-def load_file(path: str | Path, *, format: Format = "auto", encoding: str = "utf-8") -> Any:
+def load_file(
+    path: str | Path, *, format: Format = "auto", encoding: str = "utf-8"
+) -> Any:
     """Charge une configuration depuis un fichier."""
 
     path = Path(path)
@@ -158,4 +160,3 @@ def load_file(path: str | Path, *, format: Format = "auto", encoding: str = "utf
 
 
 __all__ = ["ConfigSyntaxError", "SyntaxIssue", "load_file", "load_text"]
-

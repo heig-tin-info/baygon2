@@ -1,9 +1,7 @@
 import pytest
 import yaml
-from pydantic import ValidationError
 
-from baygon.schema import normalize_spec, Spec
-
+from baygon.schema import Spec, normalize_spec
 
 EXAMPLE_V1_A = "\n".join(
     [
@@ -21,10 +19,10 @@ EXAMPLE_V1_A = "\n".join(
         "    args: [1, 2]",
         "    stdout: []",
         "  - name: Version on stderr",
-        "    args: [\"--version\"]",
+        '    args: ["--version"]',
         "    stderr:",
         "      - match: 'm/\\d+\\.\\d+\\.\\d+/'",
-        "      - contains: \"Version\"",
+        '      - contains: "Version"',
         "",
     ]
 )
@@ -39,7 +37,7 @@ EXAMPLE_V1_B = "\n".join(
         "    args: [4, 5]",
         "    executable: add.exe.py",
         "    stdout:",
-        "      - contains: \"a+b=4+5\"",
+        '      - contains: "a+b=4+5"',
         "",
     ]
 )
@@ -60,12 +58,12 @@ EXAMPLE_V1_C = "\n".join(
         "    args: [1, 2]",
         "    stdout:",
         "      - trim: {}",
-        "      - equals: \"5\"",
+        '      - equals: "5"',
         "  - name: Version on stderr",
-        "    args: [\"--version\"]",
+        '    args: ["--version"]',
         "    stderr:",
         "      - match: 'm/\\d+\\.\\d+\\.\\d+/'",
-        "      - contains: \"tarton\"",
+        '      - contains: "tarton"',
         "",
     ]
 )
@@ -96,36 +94,36 @@ EXAMPLE_V2_FULL = "\n".join(
         "    args: [1, 2]",
         "    stdout:",
         "      - match: 'm/\\d+\\.\\d+\\.\\d+/im'",
-        "      - contains: \"Version\"",
-        "      - sub: { regex: \" \", repl: \"\", flags: \"g\" }",
-        "      - equals: \"3\"",
+        '      - contains: "Version"',
+        '      - sub: { regex: " ", repl: "", flags: "g" }',
+        '      - equals: "3"',
         "      - capture:",
         "          regex: '(\\d+)'",
         "          tests:",
         "            - lt: 10",
-        "            - check_eval: \"int(value) % 3 == 0\"",
+        '            - check_eval: "int(value) % 3 == 0"',
         "    stderr: []",
         "    files:",
         "      output.txt:",
         "        ops:",
         "          - trim: {}",
-        "          - not_contains: \"Error\"",
+        '          - not_contains: "Error"',
         "  - name: Version on stderr",
-        "    args: [\"--version\"]",
+        '    args: ["--version"]',
         "    stderr:",
         "      - match: 'm/\\d+\\.\\d+\\.\\d+/'",
-        "      - contains: { value: \"Version\", explain: \"Should mention Version\" }",
+        '      - contains: { value: "Version", explain: "Should mention Version" }',
         "  - name: With setup/teardown and stdin list",
         "    setup:",
         "      - run: echo pre",
         "      - eval: x = 1",
         "    teardown:",
         "      - run: echo post",
-        "    stdin: [\"line1\", \"line2\"]",
-        "    args: [\"--echo-stdin\"]",
+        '    stdin: ["line1", "line2"]',
+        '    args: ["--echo-stdin"]',
         "    stdout:",
-        "      - contains: \"line1\"",
-        "      - contains: \"line2\"",
+        '      - contains: "line1"',
+        '      - contains: "line2"',
         "",
     ]
 )

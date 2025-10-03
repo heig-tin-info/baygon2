@@ -59,5 +59,3 @@ def test_syntax_issue_formatting_variants():
 
     issue_with_line = SyntaxIssue(parser="json", message="Oops", source="cfg", line=2)
     assert issue_with_line.format_location() == "cfg:2"
-
-

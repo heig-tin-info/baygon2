@@ -290,7 +290,19 @@ class CCapture(CheckBase):
         return self
 
 
-Check = CMatch | CContains | CNotContains | CEquals | CNotEquals | CLt | CLte | CGt | CGte | CCheckEval | CCapture
+Check = (
+    CMatch
+    | CContains
+    | CNotContains
+    | CEquals
+    | CNotEquals
+    | CLt
+    | CLte
+    | CGt
+    | CGte
+    | CCheckEval
+    | CCapture
+)
 
 
 def parse_check(obj: Any) -> Check:
