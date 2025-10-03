@@ -19,9 +19,10 @@ Points clés:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
-from pydantic import BaseModel, Field, ValidationError, model_validator
 import re
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Utilitaires
@@ -31,7 +32,7 @@ _PERL_M = re.compile(r"^m\/(.*)\/([a-zA-Z]*)$")
 _PERL_S = re.compile(r"^s\/(.*)\/(.*)\/([a-zA-Z]*)$")
 
 
-def _parse_perl_like(pattern: str) -> Tuple[str, str, Optional[str]]:
+def _parse_perl_like(pattern: str) -> tuple[str, str, str | None]:
     """Parse une regex Perl-like:
     - match:  "m/<regex>/<flags>"  → ("m", regex, flags)
     - sub:    "s/<regex>/<repl>/<flags>" → ("s", "regex:::repl", flags)
@@ -48,7 +49,7 @@ def _parse_perl_like(pattern: str) -> Tuple[str, str, Optional[str]]:
     return ("", pattern, None)
 
 
-def _as_str_list(v: Any) -> List[str]:
+def _as_str_list(v: Any) -> list[str]:
     if v is None:
         return []
     if isinstance(v, (list, tuple)):
@@ -81,7 +82,7 @@ class FSub(FilterBase):
     kind: Literal["sub"] = "sub"
     regex: str
     repl: str = ""
-    flags: Optional[str] = None
+    flags: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -104,11 +105,11 @@ class FMapEval(FilterBase):
     expr: str = Field(..., description="Expression sûre, renvoie une string")
 
 
-Filter = Union[FTrim, FLower, FUpper, FSub, FMapEval]
+Filter = FTrim | FLower | FUpper | FSub | FMapEval
 
 
 def parse_filter(obj: Any) -> Filter:
-    """Accepte:
+    r"""Accepte:
     - { trim: {} }
     - { sub: "s/\s+//g" }
     - { sub: { regex: "...", repl: "...", flags: "gmi" } }
@@ -152,13 +153,13 @@ class CheckBase(BaseModel):
         "check_eval",
         "capture",
     ]
-    explain: Optional[str] = None
+    explain: str | None = None
 
 
 class CMatch(CheckBase):
     kind: Literal["match"] = "match"
     regex: str
-    flags: Optional[str] = None
+    flags: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -256,10 +257,10 @@ class CCheckEval(CheckBase):
 class CCapture(CheckBase):
     kind: Literal["capture"] = "capture"
     regex: str
-    flags: Optional[str] = None
+    flags: str | None = None
     group: int = 1
     # on accepte n'importe quelle forme puis on normalise en after-validator
-    tests: List[Any] = Field(default_factory=list)
+    tests: list[Any] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -279,7 +280,7 @@ class CCapture(CheckBase):
 
     @model_validator(mode="after")
     def _coerce_tests(self):
-        norm: List[CheckBase] = []
+        norm: list[CheckBase] = []
         for item in self.tests:
             if isinstance(item, CheckBase):
                 norm.append(item)
@@ -289,19 +290,7 @@ class CCapture(CheckBase):
         return self
 
 
-Check = Union[
-    CMatch,
-    CContains,
-    CNotContains,
-    CEquals,
-    CNotEquals,
-    CLt,
-    CLte,
-    CGt,
-    CGte,
-    CCheckEval,
-    CCapture,
-]
+Check = CMatch | CContains | CNotContains | CEquals | CNotEquals | CLt | CLte | CGt | CGte | CCheckEval | CCapture
 
 
 def parse_check(obj: Any) -> Check:
@@ -338,15 +327,15 @@ def parse_check(obj: Any) -> Check:
 # Stream ops (mix filters & checks)
 # ---------------------------------------------------------------------------
 
-StreamOp = Union[Filter, Check]
+StreamOp = Filter | Check
 
 
-def parse_stream_ops(seq: Any) -> List[StreamOp]:
+def parse_stream_ops(seq: Any) -> list[StreamOp]:
     if seq is None:
         return []
     if not isinstance(seq, list):
         raise ValueError("Un flux doit être une liste d'opérations (filters/checks)")
-    out: List[StreamOp] = []
+    out: list[StreamOp] = []
     for item in seq:
         if not isinstance(item, dict) or len(item) != 1:
             raise ValueError("Chaque opération doit être un objet à une seule clé")
@@ -364,12 +353,12 @@ def parse_stream_ops(seq: Any) -> List[StreamOp]:
 
 
 class ExecConfig(BaseModel):
-    cmd: Union[str, List[str]]
-    timeout: Optional[float] = None
-    stdin: Optional[Union[str, List[str]]] = None
-    args: List[str] = Field(default_factory=list)
-    env: Dict[str, str] = Field(default_factory=dict)
-    cwd: Optional[str] = None
+    cmd: str | list[str]
+    timeout: float | None = None
+    stdin: str | list[str] | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    cwd: str | None = None
     shell: bool = False
 
     @model_validator(mode="before")
@@ -413,7 +402,7 @@ class SetupStep(BaseModel):
 
 class FileSpec(BaseModel):
     # Objets déjà normalisés → éviter revalidation
-    ops: List[Any] = Field(default_factory=list)
+    ops: list[Any] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -435,24 +424,24 @@ class FileSpec(BaseModel):
 class TestCase(BaseModel):
     __test__ = False
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
-    tests: Optional[List["TestCase"]] = None
+    tests: list[TestCase] | None = None
 
     # Objets déjà normalisés (pas de revalidation Union)
-    filters: List[Any] = Field(default_factory=list)
-    setup: List[SetupStep] = Field(default_factory=list)
-    teardown: List[SetupStep] = Field(default_factory=list)
+    filters: list[Any] = Field(default_factory=list)
+    setup: list[SetupStep] = Field(default_factory=list)
+    teardown: list[SetupStep] = Field(default_factory=list)
 
-    stdin: Optional[Union[str, List[str]]] = None
-    args: List[str] = Field(default_factory=list)
-    exit: Optional[int] = None
+    stdin: str | list[str] | None = None
+    args: list[str] = Field(default_factory=list)
+    exit: int | None = None
     repeat: int = 1
 
-    stdout: List[Any] = Field(default_factory=list)
-    stderr: List[Any] = Field(default_factory=list)
+    stdout: list[Any] = Field(default_factory=list)
+    stderr: list[Any] = Field(default_factory=list)
 
-    files: Dict[str, FileSpec] = Field(default_factory=dict)
+    files: dict[str, FileSpec] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -471,7 +460,7 @@ class TestCase(BaseModel):
         if "filters" in v:
             v["filters"] = [parse_filter(x) for x in (v.get("filters") or [])]
         if "files" in v and isinstance(v["files"], dict):
-            files_norm: Dict[str, FileSpec] = {}
+            files_norm: dict[str, FileSpec] = {}
             for fname, spec in v["files"].items():
                 files_norm[fname] = FileSpec.model_validate(spec)
             v["files"] = files_norm
@@ -496,9 +485,9 @@ class Spec(BaseModel):
     version: int = 1
     exec: ExecConfig
 
-    filters: List[Any] = Field(default_factory=list)
+    filters: list[Any] = Field(default_factory=list)
 
-    tests: List[TestCase]
+    tests: list[TestCase]
 
     @model_validator(mode="before")
     @classmethod
@@ -516,7 +505,7 @@ class Spec(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def normalize_spec(data: Dict[str, Any]) -> Spec:
+def normalize_spec(data: dict[str, Any]) -> Spec:
     """Valide et normalise un dict (issu YAML/JSON) vers un modèle **canonique**.
     Lève `pydantic.ValidationError` en cas d'erreur.
     """
@@ -524,11 +513,11 @@ def normalize_spec(data: Dict[str, Any]) -> Spec:
 
 
 __all__ = [
-    "Spec",
-    "ExecConfig",
-    "TestCase",
-    "Filter",
     "Check",
+    "ExecConfig",
+    "Filter",
+    "Spec",
     "StreamOp",
+    "TestCase",
     "normalize_spec",
 ]

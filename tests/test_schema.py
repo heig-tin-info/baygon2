@@ -2,15 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from baygon.schema import (
-    normalize_spec,
     Spec,
-    ExecConfig,
-    TestCase,
-    Filter,
-    Check,
-    StreamOp,
+    normalize_spec,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
