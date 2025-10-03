@@ -1,0 +1,26 @@
+site_name: Baygon
+site_description: Minimal functional testing for executables
+site_url: https://heig-tin-info.github.io/baygon/
+repo_name: heig-tin-info/baygon
+repo_url: https://github.com/heig-tin-info/baygon
+
+theme:
+  name: material
+  logo: baygon.svg
+  favicon: baygon.svg
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Config file syntax: syntax.md
+  - Advanced: advanced.md
+  - Academic assignment: score.md
+  - Scripting: scripting.md
+  - Contributing: contributing.md
+
+docs_dir: docs
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true

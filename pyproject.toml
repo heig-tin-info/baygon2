@@ -44,6 +44,11 @@ dev = [
   "pytest-cov>=5.0",
   "ruff>=0.6",
 ]
+# Dépendances pour construire la documentation
+docs = [
+  "mkdocs>=1.6,<2.0",
+  "mkdocs-material>=9.5,<10.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/heig-tin-info/baygon"
