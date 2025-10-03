@@ -11,6 +11,6 @@ tests:
     executable: cat
     stdin: foo.c
     stdout:
-      - regex: void\s+foo\s*\(\s*int\s+\w+\)
+      - match: 'm/void\s+foo\s*\(\s*int\s+\w+\)/'
 ```
 
