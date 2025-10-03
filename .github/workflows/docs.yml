@@ -1,0 +1,20 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v2
+      - name: Install documentation dependencies
+        run: uv pip install -e '.[docs]'
+      - name: Build documentation
+        run: uv run mkdocs build --strict
