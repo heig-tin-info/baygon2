@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "baygon"
+version = "0.6.0"
+description = "Agnostic CLI tester with a simple DSL and readable output"
+readme = "README.md"
+authors = [
+  { name = "Yves Chevallier", email = "yves.chevallier@heig-vd.ch" },
+]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["testing", "functional-testing", "cli", "education"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+]
+# Dépendances minimales pour schema.py
+# (on ajoute le reste quand on implémente le runner/CLI)
+dependencies = [
+  "pydantic>=2.7",
+  "regex>=2024.5.15",
+]
+
+[project.optional-dependencies]
+# Dépendances pour développer et lancer les tests unitaires
+# Utiliser: `pip install -e .[dev]` ou `uv pip install -e .[dev]`
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/heig-tin-info/baygon"
+Documentation = "https://heig-tin-info.github.io/baygon/"
+Source = "https://github.com/heig-tin-info/baygon"
+Issues = "https://github.com/heig-tin-info/baygon/issues"
+
+# Entrées console (désactivées tant que la CLI n'est pas prête)
+#[project.scripts]
+#baygon = "baygon.cli:main"
+
+[tool.hatch.build]
+# layout en src/
+include = ["src/baygon", "README.md", "LICENSE", "tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/baygon"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# active aussi le formateur intégré (évite Black)
+extend-select = ["I"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",  # pycodestyle/pyflakes
+  "I",              # isort
+  "UP",             # pyupgrade
+  "B",              # bugbear
+  "SIM",            # simplify
+  "RUF",            # ruff-specific
+]
+ignore = [
+  "E501",   # line too long (laissé au formateur)
+]
+
+[tool.pytest.ini_options]
+addopts = [
+  "-q",
+  "--cov=baygon",
+  "--cov-report=term-missing",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["baygon"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+# Support uv (optionnel) : déclarer des extras installables via `uv pip`
+[tool.uv]
+# rien d'obligatoire ici; uv lit les deps PEP 621
