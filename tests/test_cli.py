@@ -42,3 +42,22 @@ def test_check_missing_file(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "Could not read" in result.stderr
+
+
+def test_check_auto_discovers_file() -> None:
+    with runner.isolated_filesystem():
+        config = Path("baygon.yaml")
+        config.write_text("name: Baygon\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["check"])
+
+        assert result.exit_code == 0
+        assert "Configuration looks good" in result.stdout
+
+
+def test_check_auto_reports_missing() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(app, ["check"])
+
+        assert result.exit_code == 1
+        assert "Could not read" in result.stderr
