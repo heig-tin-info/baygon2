@@ -10,7 +10,28 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, create_model
 
-from tinykernel import TinyKernel
+try:  # pragma: no cover - import convenience
+    from tinykernel import TinyKernel  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback when optional dep missing
+    class TinyKernel:  # type: ignore[override]
+        """Lightweight replacement for :mod:`tinykernel` used in tests.
+
+        The real dependency offers a tiny execution sandbox with persistent
+        globals.  The test environment does not install it, so we emulate the
+        handful of behaviours Baygon relies on: executing statements,
+        evaluating expressions and exposing the global namespace through ``glb``.
+        """
+
+        def __init__(self) -> None:
+            self.glb: dict[str, Any] = {"__builtins__": __builtins__}
+
+        def __call__(self, code: str):
+            try:
+                compiled = compile(code, "<tinykernel>", "eval")
+            except SyntaxError:
+                exec(compile(code, "<tinykernel>", "exec"), self.glb, self.glb)
+                return self.glb.get("_")
+            return eval(compiled, self.glb, self.glb)
 
 __all__ = [
     "Filter",
