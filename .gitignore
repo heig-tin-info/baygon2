@@ -12,3 +12,4 @@ build/
 site/
 .DS_Store
 .cache/
+site/

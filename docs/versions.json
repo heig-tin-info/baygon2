@@ -1,0 +1,10 @@
+{
+  "default": "latest",
+  "versions": [
+    {
+      "version": "latest",
+      "title": "Version actuelle",
+      "aliases": ["stable"]
+    }
+  ]
+}

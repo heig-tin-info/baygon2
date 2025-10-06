@@ -57,6 +57,8 @@ extra:
           data: 0
           note: >-
             Thanks for your feedback!
+extra_css:
+  - 'styles/home.css'
 
 # https://www.mkdocs.org/user-guide/configuration/#validation
 validation:

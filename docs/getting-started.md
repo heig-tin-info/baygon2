@@ -11,6 +11,7 @@ Points can be assigned to tests, group of tests or automatically distributed bas
 !!! warning
     Baygon is currently in `beta` stage. It's ready to be used for building functional tests, but the config and API are not stable enough, which is likely to have breaking changes between minor releases.
 
+Have fun squashing bugs!
 
 ## How it works
 
