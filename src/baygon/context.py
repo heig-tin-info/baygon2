@@ -1,4 +1,4 @@
-"""Gestion d'un contexte Python minimal pour le templating ``{{ ... }}``."""
+"""Manage a minimal Python context for ``{{ ... }}`` templating."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ _POST_INC_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\+\+(?!\+)")
 
 
 class ContextError(RuntimeError):
-    """Erreur survenue lors de l'utilisation du ``Context``."""
+    """Error raised while using the ``Context``."""
 
     def __init__(
         self,
@@ -40,7 +40,7 @@ class ContextError(RuntimeError):
 
 
 def _split_format_spec(expr: str) -> tuple[str, str | None]:
-    """Sépare ``expr`` en (expression, format_spec) en respectant les parenthèses."""
+    """Split ``expr`` into (expression, format_spec) while respecting parentheses."""
 
     text = expr.strip()
     depth = 0
@@ -75,7 +75,7 @@ def _split_format_spec(expr: str) -> tuple[str, str | None]:
 
 
 def _rewrite_increments(expr: str) -> str:
-    """Remplace les occurrences de ``x++`` / ``++x`` par des helpers Python."""
+    """Replace occurrences of ``x++`` / ``++x`` with Python helpers."""
 
     def _pre(match: re.Match[str]) -> str:
         return f'_ctx_pre_inc("{match.group(1)}")'
@@ -83,20 +83,20 @@ def _rewrite_increments(expr: str) -> str:
     def _post(match: re.Match[str]) -> str:
         return f'_ctx_post_inc("{match.group(1)}")'
 
-    # Pré-incrément avant post-incrément pour gérer ``++x`` isolé
+    # Apply pre-increment before post-increment to handle standalone ``++x``
     rewritten = _PRE_INC_RE.sub(_pre, expr)
     rewritten = _POST_INC_RE.sub(_post, rewritten)
     return rewritten
 
 
 class Context:
-    """Petit environnement Python pour les tests Baygon.
+    """Small Python environment used by Baygon tests.
 
-    Il offre:
+    It provides:
 
-    * exécution de code Python (`execute`) partageant un namespace local,
-    * évaluation d'expressions avec support de ``x++`` / ``++x``,
-    * rendu de chaînes contenant des moustaches ``{{ ... }}``.
+    * execution of Python code (`execute`) sharing a local namespace,
+    * evaluation of expressions with ``x++`` / ``++x`` support,
+    * rendering of strings containing mustaches ``{{ ... }}``.
     """
 
     def __init__(
@@ -118,12 +118,12 @@ class Context:
         })
 
     # ------------------------------------------------------------------
-    # Helpers d'accès
+    # Access helpers
     # ------------------------------------------------------------------
 
     @property
     def namespace(self) -> Mapping[str, Any]:
-        """Renvoie une vue en lecture seule du namespace local."""
+        """Return a read-only view of the local namespace."""
 
         return MappingProxyType(self._locals)
 
@@ -134,27 +134,27 @@ class Context:
         self._locals[key] = value
 
     # ------------------------------------------------------------------
-    # Gestion du code / expressions
+    # Code / expression handling
     # ------------------------------------------------------------------
 
     def execute(self, code: str, *, filename: str = "<context>") -> None:
-        """Exécute du code Python dans le namespace du contexte."""
+        """Execute Python code within the context namespace."""
 
         try:
             compiled = compile(code, filename, "exec")
             exec(compiled, self._globals, self._locals)
-        except Exception as exc:  # pragma: no cover - simplement reformaté
+        except Exception as exc:  # pragma: no cover - formatting only
             raise ContextError(
-                "Erreur lors de l'exécution du code de contexte",
+                "Error while executing context code",
                 code=code,
             ) from exc
 
     def evaluate(self, expression: str) -> Any:
-        """Évalue une expression Python (avec support ``++``)."""
+        """Evaluate a Python expression (with ``++`` support)."""
 
         expr = expression.strip()
         if not expr:
-            raise ContextError("Expression vide", expression=expression)
+            raise ContextError("Empty expression", expression=expression)
 
         rewritten = _rewrite_increments(expr)
 
@@ -162,26 +162,26 @@ class Context:
             compiled = compile(rewritten, "<context>", "eval")
         except SyntaxError as exc:
             raise ContextError(
-                f"Expression invalide: {expression}", expression=expression
+                f"Invalid expression: {expression}", expression=expression
             ) from exc
 
         try:
             return eval(compiled, self._globals, self._locals)
-        except Exception as exc:  # pragma: no cover - dépend du code utilisateur
+        except Exception as exc:  # pragma: no cover - depends on user code
             raise ContextError(
-                f"Erreur lors de l'évaluation de '{expression}'",
+                f"Error while evaluating '{expression}'",
                 expression=expression,
             ) from exc
 
     # ------------------------------------------------------------------
-    # Rendu moustaches
+    # Mustache rendering
     # ------------------------------------------------------------------
 
     def render(self, template: str) -> str:
-        """Remplace les ``{{ ... }}`` par l'évaluation correspondante."""
+        """Replace ``{{ ... }}`` with the evaluated expression."""
 
         if not isinstance(template, str):
-            raise TypeError("template doit être une chaîne")
+            raise TypeError("template must be a string")
 
         def _replace(match: re.Match[str]) -> str:
             inner = match.group(1)
@@ -197,7 +197,7 @@ class Context:
             message = err.message
             if err.expression is not None:
                 message = (
-                    f"Erreur lors du rendu de '{{{{ {err.expression} }}}}'"
+                    f"Error while rendering '{{{{ {err.expression} }}}}'"
                 )
             raise ContextError(
                 message,
@@ -206,7 +206,7 @@ class Context:
             ) from err.__cause__
 
     def render_value(self, value: Any) -> Any:
-        """Applique ``render`` récursivement sur str/list/tuple/dict."""
+        """Apply ``render`` recursively on str/list/tuple/dict."""
 
         if isinstance(value, str):
             return self.render(value)
@@ -219,13 +219,13 @@ class Context:
         return value
 
     # ------------------------------------------------------------------
-    # Incréments
+    # Increments
     # ------------------------------------------------------------------
 
     def _pre_inc(self, name: str) -> Any:
         try:
             current = self._locals[name]
-        except KeyError as exc:  # pragma: no cover - délègue à evaluate
+        except KeyError as exc:  # pragma: no cover - delegated to evaluate
             raise NameError(name) from exc
         new_value = current + 1
         self._locals[name] = new_value
@@ -234,7 +234,7 @@ class Context:
     def _post_inc(self, name: str) -> Any:
         try:
             current = self._locals[name]
-        except KeyError as exc:  # pragma: no cover - délègue à evaluate
+        except KeyError as exc:  # pragma: no cover - delegated to evaluate
             raise NameError(name) from exc
         self._locals[name] = current + 1
         return current

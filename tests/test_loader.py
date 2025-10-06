@@ -34,7 +34,7 @@ def test_json_error_contains_location():
     assert issue.source == "broken.json"
     assert issue.line == 1
     assert issue.column is not None
-    assert "guillemets" in (issue.hint or "")
+    assert "double quotes" in (issue.hint or "")
 
 
 def test_auto_collects_all_errors():
@@ -53,9 +53,9 @@ def test_invalid_format_raises_value_error():
 
 
 def test_syntax_issue_formatting_variants():
-    issue = SyntaxIssue(parser="yaml", message="Erreur")
+    issue = SyntaxIssue(parser="yaml", message="Error")
     assert issue.format_location() == "<string>"
-    assert issue.to_message() == "[yaml] <string>: Erreur"
+    assert issue.to_message() == "[yaml] <string>: Error"
 
     issue_with_line = SyntaxIssue(parser="json", message="Oops", source="cfg", line=2)
     assert issue_with_line.format_location() == "cfg:2"

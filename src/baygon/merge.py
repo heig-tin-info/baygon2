@@ -1,4 +1,4 @@
-"""Propagation utilitaire des champs héritables d'un ``Spec``."""
+"""Utility propagation of inheritable ``Spec`` fields."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .schema import TESTCASE_PROPAGATION, FileSpec, Spec, TestCase
 
 
 def _clone_items(items: list[Any]) -> list[Any]:
-    """Retourne une liste clonée (``model_copy`` pour les objets Pydantic)."""
+    """Return a cloned list (``model_copy`` for Pydantic models)."""
 
     cloned: list[Any] = []
     for item in items:
@@ -27,7 +27,7 @@ def _merge_files(
     parent: dict[str, FileSpec],
     child: dict[str, FileSpec],
 ) -> dict[str, FileSpec]:
-    """Fusionne les attentes sur les fichiers en préservant l'ordre parent → enfant."""
+    """Merge file expectations while preserving parent → child order."""
 
     merged: dict[str, FileSpec] = {
         name: spec.model_copy(deep=True) for name, spec in parent.items()
@@ -62,7 +62,7 @@ _missing = _expected - _initial_keys
 _extra = _initial_keys - _expected
 if _missing or _extra:  # pragma: no cover - configuration guard
     raise RuntimeError(
-        "Configuration de propagation incohérente",
+        "Inconsistent propagation configuration",
         {"missing": sorted(_missing), "extra": sorted(_extra)},
     )
 
@@ -84,7 +84,7 @@ def _combine_field(mode: str, parent: Any, child: Any) -> Any:
         merged: dict[str, int] = dict(parent or {})
         merged.update(child)
         return merged
-    raise ValueError(f"Mode de propagation inconnu: {mode}")
+    raise ValueError(f"Unknown propagation mode: {mode}")
 
 
 def _assign_field(mode: str, meta: dict[str, Any], value: Any) -> Any:
@@ -137,7 +137,7 @@ def _propagate(test: TestCase, ctx: dict[str, Any]) -> None:
 
 
 def merge_spec(spec: Spec) -> Spec:
-    """Retourne une copie de ``spec`` avec propagation des champs héritables."""
+    """Return a copy of ``spec`` with inheritable fields propagated."""
 
     merged = spec.model_copy(deep=True)
 

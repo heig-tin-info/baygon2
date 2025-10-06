@@ -61,7 +61,7 @@ def test_filters_compact_and_canonical_on_root():
     spec = normalize_spec(data)
     kinds = [op.kind for op in spec.filters]
     assert kinds == ["trim", "sub", "sub", "lower", "upper", "map_eval"]
-    # vérifie la normalisation du sub perl-like
+    # Ensure the perl-like sub expression is normalized
     fsub = spec.filters[1]
     assert fsub.regex == "\\s+" and fsub.repl == "" and "g" in (fsub.flags or "")
 
@@ -77,7 +77,7 @@ def test_checks_compact_vs_canonical_and_numbers():
                     {
                         "contains": {
                             "value": "Build",
-                            "explain": "doit mentionner Build",
+                            "explain": "must mention Build",
                         }
                     },
                     {"equals": 42},
@@ -232,7 +232,7 @@ def test_unknown_filter_error():
     }
     with pytest.raises(ValidationError) as ei:
         normalize_spec(data)
-    assert "Filtre inconnu" in str(ei.value)
+    assert "Unknown filter" in str(ei.value)
 
 
 def test_unknown_check_error():
@@ -244,7 +244,7 @@ def test_unknown_check_error():
     }
     with pytest.raises(ValidationError) as ei:
         normalize_spec(data)
-    assert "Check inconnu" in str(ei.value)
+    assert "Unknown check" in str(ei.value)
 
 
 def test_stream_item_must_be_single_key_object():
@@ -254,14 +254,14 @@ def test_stream_item_must_be_single_key_object():
             {
                 "name": "t",
                 "stdout": [
-                    {"contains": "A", "equals": "B"},  # deux clés -> erreur
+                    {"contains": "A", "equals": "B"},  # two keys -> error
                 ],
             },
         ],
     }
     with pytest.raises(ValidationError) as ei:
         normalize_spec(data)
-    assert "une seule clé" in str(ei.value)
+    assert "single-key" in str(ei.value)
 
 
 def test_files_wrong_shape():

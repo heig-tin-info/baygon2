@@ -1,20 +1,20 @@
 """
-Schema et normalisation de la DSL "baygon" (v1)
+Schema and normalization for the "baygon" DSL (v1).
 
-- Accepte une syntaxe **permissive** (compacte) depuis YAML/JSON
-- Normalise en une forme **canonique** interne
-- Indépendant de l'I/O (pas de lecture de fichiers ici)
+- Accepts a **permissive** (compact) syntax coming from YAML/JSON.
+- Normalizes it into an internal **canonical** form.
+- Independent from I/O (no file reading happens here).
 
-Points clés:
-- Deux formes pour checks/filters: compacte (`contains: "x"`) et canonique
+Key points:
+- Two shapes for checks/filters: compact (`contains: "x"`) and canonical
   (`contains: { value: "x", explain: "..." }`).
-- PCRE-like support: `m/.../flags` et `s/.../.../flags` (via module `regex` côté exécution ;
-  ici on stocke `regex`, `repl`, `flags`).
-- Mix **filters** et **checks** dans l'ordre de `stdout`/`stderr`/`files.<name>`.
-- `capture` sans nom symbolique; `group` par défaut à 1.
-- `eval` scindé en `check_eval` (assertion) et `map_eval` (filtre/transform).
-- On **évite les revalidations Pydantic** en stockant des objets déjà normalisés
-  (les champs `stdout`/`stderr`/`filters`/`files.*.ops` sont typés `List[Any]`).
+- PCRE-like support: `m/.../flags` and `s/.../.../flags` (via the `regex` module at runtime;
+  we store `regex`, `repl`, `flags` here).
+- Mix **filters** and **checks** in order within `stdout`/`stderr`/`files.<name>`.
+- `capture` without a symbolic name; `group` defaults to 1.
+- `eval` split into `check_eval` (assertion) and `map_eval` (filter/transform).
+- We **avoid repeated Pydantic validations** by storing already normalized objects
+  (fields `stdout`/`stderr`/`filters`/`files.*.ops` are typed as `List[Any]`).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 # ---------------------------------------------------------------------------
-# Utilitaires
+# Utilities
 # ---------------------------------------------------------------------------
 
 _PERL_M = re.compile(r"^m\/(.*)\/([a-zA-Z]*)$")
@@ -33,10 +33,10 @@ _PERL_S = re.compile(r"^s\/(.*)\/(.*)\/([a-zA-Z]*)$")
 
 
 def _parse_perl_like(pattern: str) -> tuple[str, str, str | None]:
-    """Parse une regex Perl-like:
+    """Parse a Perl-like regex:
     - match:  "m/<regex>/<flags>"  → ("m", regex, flags)
     - sub:    "s/<regex>/<repl>/<flags>" → ("s", "regex:::repl", flags)
-    - sinon:  ("", pattern, None)
+    - otherwise:  ("", pattern, None)
     """
     m = _PERL_M.match(pattern)
     if m:
@@ -58,18 +58,18 @@ def _as_str_list(v: Any) -> list[str]:
 
 
 def _normalize_ulimit(v: Any) -> dict[str, int] | None:
-    """Normalise un mapping de limites de ressources (``ulimit``)."""
+    """Normalize a resource limit mapping (``ulimit``)."""
 
     if v is None:
         return None
     if not isinstance(v, dict):
-        raise TypeError("ulimit doit être un objet { resource: limit }")
+        raise TypeError("ulimit must be an object { resource: limit }")
     normalized: dict[str, int] = {}
     for key, value in v.items():
         try:
             normalized[str(key)] = int(value)
         except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
-            raise TypeError("ulimit.<resource> doit être un entier") from exc
+            raise TypeError("ulimit.<resource> must be an integer") from exc
     return normalized
 
 
@@ -103,7 +103,7 @@ class FSub(FilterBase):
     @model_validator(mode="before")
     @classmethod
     def _coerce(cls, v: Any) -> Any:
-        # Formes admises:
+        # Accepted forms:
         # - "s/REGEX/REPL/gmi"
         # - { regex: "REGEX", repl: "REPL", flags: "gmi" }
         if isinstance(v, str):
@@ -111,28 +111,28 @@ class FSub(FilterBase):
             if kind == "s":
                 rx, repl = packed.split(":::", 1)
                 return {"regex": rx, "repl": repl, "flags": flags}
-            # String non perl-like → sub avec repl vide (suppression)
+            # Non-Perl-like string → treat as substitution with empty replacement (removal)
             return {"regex": v, "repl": "", "flags": None}
         return v
 
 
 class FMapEval(FilterBase):
     kind: Literal["map_eval"] = "map_eval"
-    expr: str = Field(..., description="Expression sûre, renvoie une string")
+    expr: str = Field(..., description="Safe expression that returns a string")
 
 
 Filter = FTrim | FLower | FUpper | FSub | FMapEval
 
 
 def parse_filter(obj: Any) -> Filter:
-    r"""Accepte:
+    r"""Accepts:
     - { trim: {} }
     - { sub: "s/\s+//g" }
     - { sub: { regex: "...", repl: "...", flags: "gmi" } }
-    - { lower: {} }, { upper: {} }, { map_eval: "expr" } ou dict canonique
+    - { lower: {} }, { upper: {} }, { map_eval: "expr" } or canonical dicts
     """
     if not isinstance(obj, dict) or len(obj) != 1:
-        raise ValueError("Chaque filtre doit être un objet à une seule clé")
+        raise ValueError("Each filter must be a single-key object")
     key, val = next(iter(obj.items()))
     if key == "trim":
         return FTrim()
@@ -147,7 +147,7 @@ def parse_filter(obj: Any) -> Filter:
             return FMapEval(expr=val)
         if isinstance(val, dict) and "expr" in val:
             return FMapEval(**val)
-    raise ValueError(f"Filtre inconnu: {key}")
+    raise ValueError(f"Unknown filter: {key}")
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ class CCapture(CheckBase):
     regex: str
     flags: str | None = None
     group: int = 1
-    # on accepte n'importe quelle forme puis on normalise en after-validator
+    # Accept any shape then normalize within the after-validator
     tests: list[Any] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -323,7 +323,7 @@ Check = (
 
 def parse_check(obj: Any) -> Check:
     if not isinstance(obj, dict) or len(obj) != 1:
-        raise ValueError("Chaque check doit être un objet à une seule clé")
+        raise ValueError("Each check must be a single-key object")
     key, val = next(iter(obj.items()))
     if key == "match":
         return CMatch.model_validate(val)
@@ -348,7 +348,7 @@ def parse_check(obj: Any) -> Check:
     if key == "capture":
         return CCapture.model_validate(val)
 
-    raise ValueError(f"Check inconnu: {key}")
+    raise ValueError(f"Unknown check: {key}")
 
 
 # ---------------------------------------------------------------------------
@@ -362,11 +362,11 @@ def parse_stream_ops(seq: Any) -> list[StreamOp]:
     if seq is None:
         return []
     if not isinstance(seq, list):
-        raise ValueError("Un flux doit être une liste d'opérations (filters/checks)")
+        raise ValueError("A stream must be a list of operations (filters/checks)")
     out: list[StreamOp] = []
     for item in seq:
         if not isinstance(item, dict) or len(item) != 1:
-            raise ValueError("Chaque opération doit être un objet à une seule clé")
+            raise ValueError("Each operation must be a single-key object")
         k = next(iter(item.keys()))
         if k in {"trim", "lower", "upper", "sub", "map_eval"}:
             out.append(parse_filter(item))
@@ -376,7 +376,7 @@ def parse_stream_ops(seq: Any) -> list[StreamOp]:
 
 
 # ---------------------------------------------------------------------------
-# Exécution / Contexte
+# Execution / Context
 # ---------------------------------------------------------------------------
 
 
@@ -393,7 +393,7 @@ class ExecConfig(BaseModel):
     @classmethod
     def _coerce(cls, v: Any) -> Any:
         if not isinstance(v, dict):
-            raise TypeError("exec doit être un objet")
+            raise TypeError("exec must be an object")
         v = dict(v)
         if "args" in v and v["args"] is not None:
             v["args"] = [str(x) for x in _as_str_list(v["args"])]
@@ -419,7 +419,7 @@ class SetupStep(BaseModel):
             if k in ("run", "eval"):
                 return {"kind": k, "value": str(val)}
         raise TypeError(
-            "Une étape de setup/teardown doit être { run: ... } ou { eval: ... }"
+            "A setup/teardown step must be { run: ... } or { eval: ... }"
         )
 
 
@@ -429,7 +429,7 @@ class SetupStep(BaseModel):
 
 
 class FileSpec(BaseModel):
-    # Objets déjà normalisés → éviter revalidation
+    # Objects are already normalized → skip revalidation
     ops: list[Any] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -446,7 +446,7 @@ class FileSpec(BaseModel):
                 filters = parse_stream_ops(v.get("filters") or [])
                 checks = parse_stream_ops(v.get("checks") or [])
                 return {"ops": [*filters, *checks]}
-        raise ValueError("files.<name> doit être une liste d'opérations ou {ops:[...]}")
+        raise ValueError("files.<name> must be a list of operations or {ops:[...]}")
 
 
 class TestCase(BaseModel):
@@ -456,7 +456,7 @@ class TestCase(BaseModel):
 
     tests: list[TestCase] | None = None
 
-    # Objets déjà normalisés (pas de revalidation Union)
+    # Objects are already normalized (no Union revalidation)
     filters: list[Any] = Field(
         default_factory=list,
         json_schema_extra={"propagate": {"mode": "list_parent_first", "clone": True}},
@@ -502,7 +502,7 @@ class TestCase(BaseModel):
     @classmethod
     def _pre(cls, v: Any) -> Any:
         if not isinstance(v, dict):
-            raise TypeError("Chaque test doit être un objet")
+            raise TypeError("Each test must be an object")
         v = dict(v)
         if "args" in v and v["args"] is not None:
             v["args"] = [str(x) for x in _as_str_list(v["args"])]
@@ -542,7 +542,7 @@ for _name, _field in TestCase.model_fields.items():
 
 
 # ---------------------------------------------------------------------------
-# Racine
+# Root
 # ---------------------------------------------------------------------------
 
 
@@ -560,7 +560,7 @@ class Spec(BaseModel):
     @classmethod
     def _pre(cls, v: Any) -> Any:
         if not isinstance(v, dict):
-            raise TypeError("Le document racine doit être un objet")
+            raise TypeError("The root document must be an object")
         v = dict(v)
         if "filters" in v:
             v["filters"] = [parse_filter(x) for x in (v.get("filters") or [])]
@@ -575,8 +575,8 @@ class Spec(BaseModel):
 
 
 def normalize_spec(data: dict[str, Any]) -> Spec:
-    """Valide et normalise un dict (issu YAML/JSON) vers un modèle **canonique**.
-    Lève `pydantic.ValidationError` en cas d'erreur.
+    """Validate and normalize a dict (from YAML/JSON) into the **canonical** model.
+    Raises `pydantic.ValidationError` on failure.
     """
     return Spec.model_validate(data)
 
