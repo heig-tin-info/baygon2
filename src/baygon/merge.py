@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
 from pydantic import BaseModel
 
-from .schema import FileSpec, Spec, TestCase
+from .schema import FileSpec, Spec, TestCase, TESTCASE_PROPAGATION
 
 
 def _clone_items(items: list[Any]) -> list[Any]:
@@ -41,35 +42,94 @@ def _merge_files(
     return merged
 
 
+FieldInitializer = Callable[[Spec], Any]
+
+
+_FIELD_INITIALIZERS: dict[str, FieldInitializer] = {
+    "filters": lambda spec: list(spec.filters),
+    "setup": lambda spec: [],
+    "teardown": lambda spec: [],
+    "args": lambda spec: list(spec.exec.args),
+    "stdin": lambda spec: spec.exec.stdin,
+    "files": lambda spec: {},
+    "timeout": lambda spec: spec.timeout,
+    "ulimit": lambda spec: dict(spec.ulimit) if spec.ulimit is not None else None,
+}
+
+_expected = set(TESTCASE_PROPAGATION)
+_initial_keys = set(_FIELD_INITIALIZERS)
+_missing = _expected - _initial_keys
+_extra = _initial_keys - _expected
+if _missing or _extra:  # pragma: no cover - configuration guard
+    raise RuntimeError(
+        "Configuration de propagation incohérente",
+        {"missing": sorted(_missing), "extra": sorted(_extra)},
+    )
+
+
+def _combine_field(mode: str, parent: Any, child: Any) -> Any:
+    if mode == "list_parent_first":
+        return [*(parent or []), *(child or [])]
+    if mode == "list_child_first":
+        return [*(child or []), *(parent or [])]
+    if mode == "fallback":
+        return child if child is not None else parent
+    if mode == "files":
+        return _merge_files(parent or {}, child or {})
+    if mode == "dict_merge":
+        if child is None:
+            if parent is None:
+                return None
+            return dict(parent)
+        merged: dict[str, int] = dict(parent or {})
+        merged.update(child)
+        return merged
+    raise ValueError(f"Mode de propagation inconnu: {mode}")
+
+
+def _assign_field(mode: str, meta: dict[str, Any], value: Any) -> Any:
+    if mode.startswith("list"):
+        items = list(value)
+        if meta.get("clone"):
+            return _clone_items(items)
+        return items
+    if mode == "dict_merge":
+        return None if value is None else dict(value)
+    if mode == "files":
+        return value
+    if mode == "fallback" and isinstance(value, list):
+        return list(value)
+    return value
+
+
+def _context_value(mode: str, value: Any) -> Any:
+    if mode.startswith("list"):
+        return list(value)
+    if mode == "dict_merge":
+        return None if value is None else dict(value)
+    if mode == "files":
+        return value
+    if mode == "fallback" and isinstance(value, list):
+        return list(value)
+    return value
+
+
+def _initial_context(spec: Spec) -> dict[str, Any]:
+    ctx: dict[str, Any] = {}
+    for name, initializer in _FIELD_INITIALIZERS.items():
+        ctx[name] = initializer(spec)
+    return ctx
+
+
 def _propagate(test: TestCase, ctx: dict[str, Any]) -> None:
-    local_filters = list(test.filters)
-    combined_filters = [*ctx["filters"], *local_filters]
-    test.filters = _clone_items(combined_filters)
-
-    local_setup = list(test.setup)
-    combined_setup = [*ctx["setup"], *local_setup]
-    test.setup = _clone_items(combined_setup)
-
-    local_teardown = list(test.teardown)
-    combined_teardown = [*local_teardown, *ctx["teardown"]]
-    test.teardown = _clone_items(combined_teardown)
-
-    local_args = list(test.args)
-    combined_args = [*ctx["args"], *local_args]
-    test.args = list(combined_args)
-
-    test.stdin = test.stdin if test.stdin is not None else ctx["stdin"]
-
-    test.files = _merge_files(ctx["files"], test.files)
-
-    child_ctx = {
-        "filters": combined_filters,
-        "setup": combined_setup,
-        "teardown": combined_teardown,
-        "args": combined_args,
-        "stdin": test.stdin,
-        "files": test.files,
-    }
+    child_ctx: dict[str, Any] = {}
+    for name, meta in TESTCASE_PROPAGATION.items():
+        mode = meta["mode"]
+        parent_value = ctx.get(name)
+        local_value = getattr(test, name)
+        combined = _combine_field(mode, parent_value, local_value)
+        setattr(test, name, _assign_field(mode, meta, combined))
+        child_ctx[name] = _context_value(mode, combined)
 
     if test.tests:
         for child in test.tests:
@@ -81,14 +141,7 @@ def merge_spec(spec: Spec) -> Spec:
 
     merged = spec.model_copy(deep=True)
 
-    base_ctx = {
-        "filters": list(merged.filters),
-        "setup": [],
-        "teardown": [],
-        "args": list(merged.exec.args),
-        "stdin": merged.exec.stdin,
-        "files": {},
-    }
+    base_ctx = _initial_context(merged)
 
     for test in merged.tests:
         _propagate(test, base_ctx)

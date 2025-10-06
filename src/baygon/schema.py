@@ -57,6 +57,22 @@ def _as_str_list(v: Any) -> list[str]:
     return [str(v)]
 
 
+def _normalize_ulimit(v: Any) -> dict[str, int] | None:
+    """Normalise un mapping de limites de ressources (``ulimit``)."""
+
+    if v is None:
+        return None
+    if not isinstance(v, dict):
+        raise TypeError("ulimit doit être un objet { resource: limit }")
+    normalized: dict[str, int] = {}
+    for key, value in v.items():
+        try:
+            normalized[str(key)] = int(value)
+        except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            raise TypeError("ulimit.<resource> doit être un entier") from exc
+    return normalized
+
+
 # ---------------------------------------------------------------------------
 # Filters
 # ---------------------------------------------------------------------------
@@ -441,19 +457,46 @@ class TestCase(BaseModel):
     tests: list[TestCase] | None = None
 
     # Objets déjà normalisés (pas de revalidation Union)
-    filters: list[Any] = Field(default_factory=list)
-    setup: list[SetupStep] = Field(default_factory=list)
-    teardown: list[SetupStep] = Field(default_factory=list)
+    filters: list[Any] = Field(
+        default_factory=list,
+        json_schema_extra={"propagate": {"mode": "list_parent_first", "clone": True}},
+    )
+    setup: list[SetupStep] = Field(
+        default_factory=list,
+        json_schema_extra={"propagate": {"mode": "list_parent_first", "clone": True}},
+    )
+    teardown: list[SetupStep] = Field(
+        default_factory=list,
+        json_schema_extra={"propagate": {"mode": "list_child_first", "clone": True}},
+    )
 
-    stdin: str | list[str] | None = None
-    args: list[str] = Field(default_factory=list)
+    stdin: str | list[str] | None = Field(
+        default=None,
+        json_schema_extra={"propagate": {"mode": "fallback"}},
+    )
+    args: list[str] = Field(
+        default_factory=list,
+        json_schema_extra={"propagate": {"mode": "list_parent_first"}},
+    )
     exit: int | None = None
     repeat: int = 1
+
+    timeout: float | None = Field(
+        default=None,
+        json_schema_extra={"propagate": {"mode": "fallback"}},
+    )
+    ulimit: dict[str, int] | None = Field(
+        default=None,
+        json_schema_extra={"propagate": {"mode": "dict_merge"}},
+    )
 
     stdout: list[Any] = Field(default_factory=list)
     stderr: list[Any] = Field(default_factory=list)
 
-    files: dict[str, FileSpec] = Field(default_factory=dict)
+    files: dict[str, FileSpec] = Field(
+        default_factory=dict,
+        json_schema_extra={"propagate": {"mode": "files"}},
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -482,10 +525,20 @@ class TestCase(BaseModel):
             v["teardown"] = [
                 SetupStep.model_validate(x) for x in (v.get("teardown") or [])
             ]
+        if "ulimit" in v:
+            v["ulimit"] = _normalize_ulimit(v.get("ulimit"))
         return v
 
 
 TestCase.model_rebuild()
+
+
+TESTCASE_PROPAGATION: dict[str, dict[str, Any]] = {}
+for _name, _field in TestCase.model_fields.items():
+    extra = _field.json_schema_extra or {}
+    propagate = extra.get("propagate")
+    if propagate:
+        TESTCASE_PROPAGATION[_name] = propagate
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +550,8 @@ class Spec(BaseModel):
     version: int = 1
     exec: ExecConfig
 
+    timeout: float | None = None
+    ulimit: dict[str, int] | None = None
     filters: list[Any] = Field(default_factory=list)
 
     tests: list[TestCase]
@@ -509,6 +564,8 @@ class Spec(BaseModel):
         v = dict(v)
         if "filters" in v:
             v["filters"] = [parse_filter(x) for x in (v.get("filters") or [])]
+        if "ulimit" in v:
+            v["ulimit"] = _normalize_ulimit(v.get("ulimit"))
         return v
 
 
@@ -528,6 +585,7 @@ __all__ = [
     "Check",
     "ExecConfig",
     "Filter",
+    "TESTCASE_PROPAGATION",
     "Spec",
     "StreamOp",
     "TestCase",
