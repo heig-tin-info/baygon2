@@ -144,7 +144,7 @@ def test_yaml_v1_examples_parse(raw):
     data = _ensure_exec(data)
     spec = normalize_spec(data)
     assert isinstance(spec, Spec)
-    # Quelques assertions de surface
+    # A few surface-level assertions
     assert spec.version == 1
     assert spec.exec is not None
     assert spec.tests and len(spec.tests) >= 1
@@ -152,9 +152,9 @@ def test_yaml_v1_examples_parse(raw):
 
 def test_yaml_v2_full_parses():
     data = yaml.safe_load(EXAMPLE_V2_FULL)
-    spec = normalize_spec(data)  # a un bloc exec complet
+    spec = normalize_spec(data)  # has a full exec block
     assert isinstance(spec, Spec)
-    # On s'assure que quelques éléments ont bien été normalisés
+    # Ensure a couple of elements were normalized
     assert spec.filters and spec.filters[0].kind == "trim"
     suite = spec.tests[1]  # "Stdout is the sum of arguments"
     kinds = [op.kind for op in suite.stdout]

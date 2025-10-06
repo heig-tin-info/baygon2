@@ -1,10 +1,9 @@
-"""Chargement agnostique YAML/JSON avec gestion des erreurs de syntaxe.
+"""Format-agnostic YAML/JSON loading with syntax error handling.
 
-Ce module fournit une couche d'I/O minimale pour la DSL "baygon". Il
-permet de charger un texte ou un fichier et de le convertir en objet
-Python en essayant successivement les parseurs JSON et YAML. Les erreurs
-de syntaxe sont collectées pour qu'une CLI puisse les afficher de manière
-pédagogique.
+This module provides a minimal I/O layer for the "baygon" DSL. It can
+load text or files and convert them to Python objects by trying the JSON
+and YAML parsers in sequence. Syntax errors are collected so a CLI can
+display them in a user-friendly way.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ Format = Literal["auto", "json", "yaml"]
 
 @dataclass(slots=True)
 class SyntaxIssue:
-    """Description d'une erreur de syntaxe détectée par un parseur."""
+    """Describe a syntax error detected by a parser."""
 
     parser: Literal["json", "yaml"]
     message: str
@@ -47,12 +46,12 @@ class SyntaxIssue:
 
 
 class ConfigSyntaxError(Exception):
-    """Erreur levée lorsque la configuration est invalide syntaxiquement."""
+    """Raised when the configuration has syntax errors."""
 
     def __init__(self, issues: Iterable[SyntaxIssue]):
         self.issues = list(issues)
         if not self.issues:
-            raise ValueError("ConfigSyntaxError requiert au moins une erreur")
+            raise ValueError("ConfigSyntaxError requires at least one error")
         super().__init__("\n".join(issue.to_message() for issue in self.issues))
 
 
@@ -60,7 +59,7 @@ def _format_json_issue(source: str | None, err: json.JSONDecodeError) -> SyntaxI
     hint = None
     message = err.msg
     if "Expecting property name" in err.msg:
-        hint = "Les clés JSON doivent être entourées de guillemets doubles"
+        hint = "JSON keys must be enclosed in double quotes"
     return SyntaxIssue(
         parser="json",
         message=message,
@@ -74,7 +73,7 @@ def _format_json_issue(source: str | None, err: json.JSONDecodeError) -> SyntaxI
 def _format_yaml_issue(source: str | None, err: YAMLError) -> SyntaxIssue:
     line: int | None = None
     column: int | None = None
-    message = "Erreur YAML inconnue"
+    message = "Unknown YAML error"
     hint = None
 
     mark = getattr(err, "problem_mark", None)
@@ -104,17 +103,16 @@ def _format_yaml_issue(source: str | None, err: YAMLError) -> SyntaxIssue:
 
 
 def load_text(text: str, *, source: str | None = None, format: Format = "auto") -> Any:
-    """Charge un texte JSON ou YAML.
+    """Load JSON or YAML text.
 
     Parameters
     ----------
     text:
-        Contenu de la configuration.
+        Configuration content.
     source:
-        Nom de fichier ou identifiant du flux, uniquement utilisé pour les
-        messages d'erreur.
+        File name or stream identifier, only used for error messages.
     format:
-        "json", "yaml" ou "auto" pour essayer les deux.
+        "json", "yaml" or "auto" to try both.
     """
 
     errors: list[SyntaxIssue] = []
@@ -139,13 +137,13 @@ def load_text(text: str, *, source: str | None = None, format: Format = "auto") 
     if errors:
         raise ConfigSyntaxError(errors)
 
-    raise ValueError(f"Format inconnu: {format}")
+    raise ValueError(f"Unknown format: {format}")
 
 
 def load_file(
     path: str | Path, *, format: Format = "auto", encoding: str = "utf-8"
 ) -> Any:
-    """Charge une configuration depuis un fichier."""
+    """Load a configuration from a file."""
 
     path = Path(path)
     if format == "auto":
