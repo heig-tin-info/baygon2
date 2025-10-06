@@ -7,9 +7,9 @@ from baygon.filters import (
     Filter,
     FilterError,
     FilterReplace,
+    Filters,
     FilterTrim,
     FilterUppercase,
-    Filters,
     registry,
 )
 

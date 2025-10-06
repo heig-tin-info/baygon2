@@ -16,9 +16,10 @@ import shutil
 import subprocess
 import sys
 from collections import namedtuple
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger("baygon")
 Outputs = namedtuple("Outputs", ["exit_status", "stdout", "stderr"])
@@ -41,7 +42,7 @@ else:
 
 # During type checking we want the real module so that attribute resolution works.
 if TYPE_CHECKING:  # pragma: no cover - type checking only
-    import ctypes as _ctypes_types
+    pass
 
 ctypes: ModuleType | Any | None = _ctypes
 
@@ -172,12 +173,12 @@ class Executable:
     filename: str
     encoding: str
 
-    def __new__(cls, filename: "Executable | str | os.PathLike[str] | None"):
+    def __new__(cls, filename: Executable | str | os.PathLike[str] | None):
         if isinstance(filename, cls):
             return filename
         return super().__new__(cls) if filename else None
 
-    def __init__(self, filename: "Executable | str | os.PathLike[str]", encoding: str = "utf-8"):
+    def __init__(self, filename: Executable | str | os.PathLike[str], encoding: str = "utf-8"):
         if isinstance(filename, self.__class__):
             self.filename = filename.filename
             self.encoding = filename.encoding
@@ -227,7 +228,7 @@ class Executable:
             extra = use_external_sandbox.get("args")
             if tool:
                 extra_args: list[str]
-                if isinstance(extra, Sequence) and not isinstance(extra, (str, bytes)):
+                if isinstance(extra, Sequence) and not isinstance(extra, str | bytes):
                     extra_args = [str(arg) for arg in extra]
                 else:
                     extra_args = []

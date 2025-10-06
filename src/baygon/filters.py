@@ -36,21 +36,21 @@ except ModuleNotFoundError:  # pragma: no cover - fallback when optional dep mis
 __all__ = [
     "Filter",
     "FilterError",
+    "FilterEval",
+    "FilterIgnoreSpaces",
+    "FilterLowercase",
+    # Builtins
+    "FilterNone",
+    "FilterRegex",
     "FilterRegistry",
+    "FilterReplace",
+    "FilterTrim",
+    "FilterUppercase",
     "Filters",
     "add_filter",
     "get_filter",
     "iter_filters",
     "registry",
-    # Builtins
-    "FilterNone",
-    "FilterUppercase",
-    "FilterLowercase",
-    "FilterTrim",
-    "FilterIgnoreSpaces",
-    "FilterReplace",
-    "FilterRegex",
-    "FilterEval",
 ]
 
 
@@ -230,8 +230,7 @@ def get_filter(name: str) -> type[Filter]:
 
 
 def iter_filters() -> Iterator[tuple[str, type[Filter]]]:
-    for item in registry.items():
-        yield item
+    yield from registry.items()
 
 
 # ---------------------------------------------------------------------------
@@ -303,12 +302,7 @@ class FilterEval(Filter):
         super().__init__(input=input)
         self._mustache = re.compile(f"{re.escape(start)}(.*?){re.escape(end)}")
         self._kernel = TinyKernel()
-        bootstrap = list(init or []) + [
-            "from math import *",
-            "from random import *",
-            "from statistics import *",
-            "from baygon.eval import iter",
-        ]
+        bootstrap = [*list(init or []), "from math import *", "from random import *", "from statistics import *", "from baygon.eval import iter"]
         for statement in bootstrap:
             self._kernel(statement)
 
