@@ -6,6 +6,7 @@ from importlib import metadata
 
 from .filters import add_filter, get_filter, iter_filters, registry
 from .matchers import add_matcher, build_matcher, get_matcher, iter_matchers, registry as matcher_registry
+from .suite import TestSuite, build_suite
 
 try:
     __version__ = metadata.version("baygon")
@@ -23,5 +24,7 @@ __all__ = [
     "get_matcher",
     "iter_matchers",
     "matcher_registry",
+    "TestSuite",
+    "build_suite",
 ]
 

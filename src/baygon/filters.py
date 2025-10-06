@@ -40,6 +40,7 @@ __all__ = [
     "FilterIgnoreSpaces",
     "FilterLowercase",
     # Builtins
+    "FilterMapEval",
     "FilterNone",
     "FilterRegex",
     "FilterRegistry",
@@ -328,6 +329,36 @@ class FilterEval(Filter):
         return f"{self.__class__.__name__}({self._mustache.pattern!r})"
 
 
+class FilterMapEval(Filter):
+    """Evaluate a Python expression to transform the value."""
+
+    registry_name = "map_eval"
+
+    def __init__(
+        self,
+        expr: str,
+        init: Sequence[str] | None = None,
+        *,
+        input: bool = False,
+    ) -> None:
+        super().__init__(input=input)
+        self.expr = expr
+        self._kernel = TinyKernel()
+        for statement in init or []:
+            self._kernel(statement)
+
+    def apply(self, value: str) -> str:
+        self._kernel.glb["value"] = value
+        self._kernel.glb["actual"] = value
+        result = self._kernel(self.expr)
+        if result is None:
+            return value
+        return str(result)
+
+    def __repr__(self) -> str:  # pragma: no cover - repr helper
+        return f"{self.__class__.__name__}({self.expr!r})"
+
+
 # Flag mapping for FilterRegex string flags -> re flags
 _REGEX_FLAGS: dict[str, int] = {
     "i": re.IGNORECASE,
@@ -347,5 +378,6 @@ for builtin in (
     FilterReplace,
     FilterRegex,
     FilterEval,
+    FilterMapEval,
 ):
     registry.register(builtin)
