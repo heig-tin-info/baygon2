@@ -52,7 +52,7 @@ def _parse_perl_like(pattern: str) -> tuple[str, str, str | None]:
 def _as_str_list(v: Any) -> list[str]:
     if v is None:
         return []
-    if isinstance(v, (list, tuple)):
+    if isinstance(v, list | tuple):
         return [str(x) for x in v]
     return [str(v)]
 
@@ -400,7 +400,7 @@ class ExecConfig(BaseModel):
         else:
             v["args"] = []
         if "stdin" in v and v["stdin"] is not None:
-            if isinstance(v["stdin"], (list, tuple)):
+            if isinstance(v["stdin"], list | tuple):
                 v["stdin"] = [str(x) for x in v["stdin"]]
             elif not isinstance(v["stdin"], str):
                 v["stdin"] = str(v["stdin"])  # fallback
@@ -582,10 +582,10 @@ def normalize_spec(data: dict[str, Any]) -> Spec:
 
 
 __all__ = [
+    "TESTCASE_PROPAGATION",
     "Check",
     "ExecConfig",
     "Filter",
-    "TESTCASE_PROPAGATION",
     "Spec",
     "StreamOp",
     "TestCase",

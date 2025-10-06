@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .schema import FileSpec, Spec, TestCase, TESTCASE_PROPAGATION
+from .schema import TESTCASE_PROPAGATION, FileSpec, Spec, TestCase
 
 
 def _clone_items(items: list[Any]) -> list[Any]:

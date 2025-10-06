@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import builtins
 import re
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Mapping
-
+from typing import Any
 
 _DEFAULT_BUILTINS: dict[str, Any] = {
     name: getattr(builtins, name)
