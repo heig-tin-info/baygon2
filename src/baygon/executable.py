@@ -7,6 +7,8 @@ Limitations / notes:
  - For production-grade sandboxing prefer external tools (nsjail, bubblewrap, firejail, gVisor, containers).
 """
 
+from __future__ import annotations
+
 import contextlib
 import logging
 import os
@@ -15,6 +17,8 @@ import subprocess
 import sys
 from collections import namedtuple
 from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 logger = logging.getLogger("baygon")
 Outputs = namedtuple("Outputs", ["exit_status", "stdout", "stderr"])
@@ -29,19 +33,31 @@ WINDOWS = sys.platform.startswith("win")
 
 if WINDOWS:
     try:
-        import ctypes
-    except Exception:
-        ctypes = None
+        import ctypes as _ctypes  # type: ignore
+    except Exception:  # pragma: no cover - platform specific
+        _ctypes = None
+else:
+    _ctypes = None
+
+# During type checking we want the real module so that attribute resolution works.
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    import ctypes as _ctypes_types
+
+ctypes: ModuleType | Any | None = _ctypes
 
 
 class InvalidExecutableError(Exception):
-    pass
+    """Raised when a provided executable path fails validation."""
 
 
-forbidden_binaries = {"rm", "mv", "dd", "wget", "mkfs"}
+FORBIDDEN_BINARIES = {"rm", "mv", "dd", "wget", "mkfs"}
 
 
-def get_env(env: dict | None = None) -> dict:
+EnvMapping = dict[str, str]
+SandboxConfig = dict[str, object]
+
+
+def get_env(env: dict[str, str] | None = None) -> EnvMapping:
     return {**os.environ, **(env or {})}
 
 
@@ -95,33 +111,40 @@ def _posix_preexec_fn(
                 os.setuid(uid)
 
         # prevent gaining new privileges (recommended)
-        if no_new_privs:
-            PR_SET_NO_NEW_PRIVS = 38
-            try:
+        if no_new_privs and ctypes is not None:
+            pr_set_no_new_privs = 38
+            with contextlib.suppress(Exception):
                 # linux prctl via ctypes to set no_new_privs
-                import ctypes
                 libc = ctypes.CDLL("libc.so.6")
-                libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
-            except Exception:
-                pass
+                libc.prctl(pr_set_no_new_privs, 1, 0, 0, 0)
 
     return _inner
 
 
 # Windows Job Object helper (best-effort)
 class _WinJob:
-    def __init__(self, cpu_time_ms=None, memory_bytes=None):
-        self.job = None
+    """Best-effort Windows Job Object wrapper used to apply limits."""
+    def __init__(self, cpu_time_ms: int | None = None, memory_bytes: int | None = None):
+        self.job: int | None = None
         self.cpu_time_ms = cpu_time_ms
         self.memory_bytes = memory_bytes
 
-    def create(self):
+    @staticmethod
+    def _kernel32() -> Any | None:
         if ctypes is None:
+            return None
+        windll = getattr(ctypes, "windll", None)
+        if windll is None:
+            return None
+        return getattr(windll, "kernel32", None)
+
+    def create(self) -> int | None:
+        kernel32 = self._kernel32()
+        if kernel32 is None:
             return None
         # Minimal safe-guard: create job and return handle; detailed limit setting omitted for brevity
         # For robust implementation, prefer pywin32 and JobObjectExtendedLimitInformation structures.
         # Here we just create a job and return it.
-        kernel32 = ctypes.windll.kernel32
         job = kernel32.CreateJobObjectW(None, None)
         if job == 0:
             return None
@@ -129,13 +152,13 @@ class _WinJob:
         # NOTE: proper limit configuration requires building JOBOBJECT_EXTENDED_LIMIT_INFORMATION struct.
         return job
 
-    def assign(self, pid):
-        if ctypes is None or self.job is None:
+    def assign(self, pid: int) -> bool:
+        kernel32 = self._kernel32()
+        if kernel32 is None or self.job is None:
             return False
-        kernel32 = ctypes.windll.kernel32
-        PROCESS_ALL_ACCESS = 0x1F0FFF
-        OpenProcess = kernel32.OpenProcess
-        hproc = OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+        process_all_access = 0x1F0FFF
+        open_process = kernel32.OpenProcess
+        hproc = open_process(process_all_access, False, pid)
         if not hproc:
             return False
         res = kernel32.AssignProcessToJobObject(self.job, hproc)
@@ -145,33 +168,40 @@ class _WinJob:
 
 
 class Executable:
-    def __new__(cls, filename):
+    """Wrapper that executes binaries with optional resource constraints."""
+    filename: str
+    encoding: str
+
+    def __new__(cls, filename: "Executable | str | os.PathLike[str] | None"):
         if isinstance(filename, cls):
             return filename
         return super().__new__(cls) if filename else None
 
-    def __init__(self, filename, encoding="utf-8"):
+    def __init__(self, filename: "Executable | str | os.PathLike[str]", encoding: str = "utf-8"):
         if isinstance(filename, self.__class__):
             self.filename = filename.filename
             self.encoding = filename.encoding
         else:
-            self.filename = filename
+            self.filename = os.fspath(filename)
             self.encoding = encoding
 
-        if not self._is_executable(self.filename):
-            if "/" not in filename and shutil.which(filename) is not None:
-                if filename in forbidden_binaries:
-                    raise InvalidExecutableError(f"Program '{filename}' is forbidden!")
-                filename = shutil.which(filename)
-                self.filename = filename
-            else:
-                raise InvalidExecutableError(f"Program '{filename}' is not an executable!")
+        resolved = self.filename
+        if not self._is_executable(resolved):
+            if "/" not in resolved:
+                located = shutil.which(resolved)
+                if located:
+                    if resolved in FORBIDDEN_BINARIES:
+                        raise InvalidExecutableError(f"Program '{resolved}' is forbidden!")
+                    self.filename = located
+                    resolved = located
+            if not self._is_executable(resolved):
+                raise InvalidExecutableError(f"Program '{resolved}' is not an executable!")
 
     def run(
         self,
-        *args,
-        stdin=None,
-        env: dict | None = None,
+        *args: object,
+        stdin: str | bytes | None = None,
+        env: dict[str, str] | None = None,
         timeout: float | None = None,
         cpu_time: int | None = None,      # seconds (POSIX)
         mem_bytes: int | None = None,     # address space bytes
@@ -179,8 +209,8 @@ class Executable:
         uid: int | None = None,
         gid: int | None = None,
         chroot_dir: str | None = None,
-        use_external_sandbox: dict | None = None,  # e.g. {"tool":"nsjail","args":[...]}
-        hook=None,
+        use_external_sandbox: SandboxConfig | None = None,  # e.g. {"tool":"nsjail","args":[...]}
+        hook: Callable[..., None] | None = None,
     ) -> Outputs:
         """
         Run executable with resource constraints.
@@ -194,13 +224,18 @@ class Executable:
         # If external sandbox requested, wrap command.
         if use_external_sandbox:
             tool = use_external_sandbox.get("tool")
-            extra = use_external_sandbox.get("args", [])
+            extra = use_external_sandbox.get("args")
             if tool:
+                extra_args: list[str]
+                if isinstance(extra, Sequence) and not isinstance(extra, (str, bytes)):
+                    extra_args = [str(arg) for arg in extra]
+                else:
+                    extra_args = []
                 # naive wrapper: tool + extra + -- cmd...
                 # user must ensure tool is present and args are correct
-                cmd = [tool, *extra, "--", *cmd]
+                cmd = [str(tool), *extra_args, "--", *cmd]
 
-        popen_kwargs = {
+        popen_kwargs: dict[str, object] = {
             "stdout": subprocess.PIPE,
             "stdin": subprocess.PIPE,
             "stderr": subprocess.PIPE,
@@ -221,7 +256,7 @@ class Executable:
                     popen_kwargs["preexec_fn"] = preexec
         else:
             # Windows: create job object with limits (best-effort)
-            if ctypes:
+            if ctypes is not None:
                 win_job = _WinJob(cpu_time_ms=(cpu_time * 1000 if cpu_time else None),
                                   memory_bytes=mem_bytes)
                 job_handle = win_job.create()
@@ -230,7 +265,8 @@ class Executable:
                     pass
 
         # spawn
-        proc = subprocess.Popen([str(x) for x in cmd], **popen_kwargs)
+        cmd_args = [str(x) for x in cmd]
+        proc = subprocess.Popen(cmd_args, **popen_kwargs)
 
         # assign to job on Windows
         if WINDOWS and win_job and win_job.job:
@@ -238,48 +274,53 @@ class Executable:
                 win_job.assign(proc.pid)
 
         try:
-            stdin_bytes = stdin.encode(self.encoding) if stdin is not None else None
+            stdout_bytes: bytes | None
+            stderr_bytes: bytes | None
+            if stdin is None:
+                stdin_bytes = None
+            elif isinstance(stdin, bytes):
+                stdin_bytes = stdin
+            else:
+                stdin_bytes = stdin.encode(self.encoding)
 
-            stdout, stderr = proc.communicate(input=stdin_bytes, timeout=timeout)
+            stdout_bytes, stderr_bytes = proc.communicate(input=stdin_bytes, timeout=timeout)
         except subprocess.TimeoutExpired:
             # timeout: kill process tree / job
             with contextlib.suppress(Exception):
                 proc.kill()
             proc.wait()
-            stdout, stderr = proc.communicate(timeout=1)
+            stdout_bytes, stderr_bytes = proc.communicate(timeout=1)
         except Exception:
             proc.kill()
             proc.wait()
             raise
 
-        if stdout is not None:
+        stdout_text = ""
+        if stdout_bytes is not None:
             try:
-                stdout = stdout.decode(self.encoding)
+                stdout_text = stdout_bytes.decode(self.encoding)
             except Exception:
-                stdout = stdout.decode(errors="ignore")
-        else:
-            stdout = ""
+                stdout_text = stdout_bytes.decode(errors="ignore")
 
-        if stderr is not None:
+        stderr_text = ""
+        if stderr_bytes is not None:
             try:
-                stderr = stderr.decode(self.encoding)
+                stderr_text = stderr_bytes.decode(self.encoding)
             except Exception:
-                stderr = stderr.decode(errors="ignore")
-        else:
-            stderr = ""
+                stderr_text = stderr_bytes.decode(errors="ignore")
 
         if hook and callable(hook):
-            hook(cmd=cmd, stdin=stdin, stdout=stdout, stderr=stderr, exit_status=proc.returncode)
+            hook(cmd=cmd_args, stdin=stdin, stdout=stdout_text, stderr=stderr_text, exit_status=proc.returncode)
 
-        return Outputs(proc.returncode, stdout, stderr)
+        return Outputs(proc.returncode, stdout_text, stderr_text)
 
     def __call__(self, *args, **kwargs):
         return self.run(*args, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}<{self.filename}>"
 
     @staticmethod
-    def _is_executable(filename):
+    def _is_executable(filename: str | os.PathLike[str]) -> bool:
         path = Path(filename)
         return path.is_file() and os.access(path, os.X_OK)
