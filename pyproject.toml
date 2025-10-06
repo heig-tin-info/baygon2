@@ -105,4 +105,12 @@ skip_covered = false
 
 # Support uv (optionnel) : déclarer des extras installables via `uv pip`
 [tool.uv]
+
+[dependency-groups]
+dev = [
+    "cairosvg>=2.8.2",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.21",
+    "pillow>=11.3.0",
+]
 # rien d'obligatoire ici; uv lit les deps PEP 621

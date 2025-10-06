@@ -7,3 +7,13 @@
 This package is a minimalist functional test suite for binaries. It relies on a description of tests usually in `test.yml` or `test.json`.
 
 The **documentation** is available [here](https://heig-tin-info.github.io/baygon/).
+
+## Build
+
+### Documentation
+
+```bash
+uv venv && source .venv/bin/activate
+uv sync
+uv run python -mmkdocs serve
+```

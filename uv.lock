@@ -55,6 +55,14 @@ docs = [
     { name = "mkdocs-material", extra = ["imaging"] },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "cairosvg" },
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "pillow" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6,<2.0" },
@@ -67,6 +75,14 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
 ]
 provides-extras = ["dev", "docs"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "cairosvg", specifier = ">=2.8.2" },
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.6.21" },
+    { name = "pillow", specifier = ">=11.3.0" },
+]
 
 [[package]]
 name = "cairocffi"
