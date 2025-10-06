@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 
 from . import __version__
-from .loader import ConfigSyntaxError, SyntaxIssue, load_file
+from .loader import ConfigSyntaxError, SyntaxIssue, load_file, locate_config_file
 
 console = Console()
 err_console = Console(stderr=True)
@@ -73,7 +73,13 @@ def _render_issue(issue: SyntaxIssue) -> str:
 @app.command()
 def check(
     ctx: typer.Context,
-    config: Path = typer.Argument(..., help="Path to the Baygon configuration file to validate."),
+    config: Path | None = typer.Argument(
+        None,
+        help=(
+            "Path to the Baygon configuration file to validate. When omitted, "
+            "Baygon will search for a suitable configuration file."
+        ),
+    ),
 ) -> None:
     """Validate a configuration file without executing it."""
 
@@ -82,12 +88,22 @@ def check(
     logger.debug("Checking configuration file %s", config)
 
     try:
-        data = load_file(config)
+        resolved_config = locate_config_file(config)
     except FileNotFoundError as exc:
-        err_console.print(f"[red]Error:[/] Could not read '{config}': {exc.strerror or exc}")
+        target = str(config) if config is not None else "auto"
+        err_console.print(
+            f"[red]Error:[/] Could not read '{target}': {exc.strerror or exc}"
+        )
         raise typer.Exit(code=1)
+    except OSError as exc:  # pragma: no cover - unexpected I/O errors
+        target = str(config) if config is not None else "auto"
+        err_console.print(f"[red]Error:[/] Could not read '{target}': {exc}")
+        raise typer.Exit(code=1)
+
+    try:
+        data = load_file(resolved_config)
     except ConfigSyntaxError as exc:
-        err_console.print(f"[red]Syntax error(s) detected in '{config}':[/]")
+        err_console.print(f"[red]Syntax error(s) detected in '{resolved_config}':[/]")
         for issue in exc.issues:
             err_console.print(f"  - {_render_issue(issue)}", markup=False)
         raise typer.Exit(code=1)

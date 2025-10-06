@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from baygon.loader import ConfigSyntaxError, SyntaxIssue, load_file, load_text
+from baygon.loader import (
+    ConfigSyntaxError,
+    SyntaxIssue,
+    load_file,
+    load_text,
+    locate_config_file,
+)
 
 
 def test_load_text_json():
@@ -23,6 +31,48 @@ def test_load_file_detects_format(tmp_path):
     path = tmp_path / "config.json"
     path.write_text('{"answer": 42}', encoding="utf-8")
     assert load_file(path) == {"answer": 42}
+
+
+def test_locate_config_file_prefers_prefix_and_extension(tmp_path: Path) -> None:
+    (tmp_path / "baygon.json").write_text("{}", encoding="utf-8")
+    preferred = tmp_path / "baygon.yaml"
+    preferred.write_text("name: preferred\n", encoding="utf-8")
+
+    located = locate_config_file(start_dir=tmp_path)
+
+    assert located == preferred
+
+
+def test_locate_config_file_stops_at_git_root(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    nested = project / "nested"
+    nested.mkdir(parents=True)
+    (project / ".git").mkdir()
+    target = project / "test.yaml"
+    target.write_text("value: 1\n", encoding="utf-8")
+
+    located = locate_config_file(start_dir=nested)
+
+    assert located == target
+
+
+def test_locate_config_file_raises_when_missing(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        locate_config_file("unknown.yaml", start_dir=tmp_path)
+
+
+def test_load_file_discovers_config(tmp_path: Path) -> None:
+    config_dir = tmp_path / "app" / "configs"
+    config_dir.mkdir(parents=True)
+    config = config_dir / "baygon.yml"
+    config.write_text("answer: 42\n", encoding="utf-8")
+
+    nested_dir = config_dir / "nested"
+    nested_dir.mkdir()
+
+    data = load_file(start_dir=nested_dir)
+
+    assert data == {"answer": 42}
 
 
 def test_json_error_contains_location():
