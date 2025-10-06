@@ -34,6 +34,8 @@ dependencies = [
   "pydantic>=2.7",
   "regex>=2024.5.15",
   "PyYAML>=6.0",
+  "rich>=13.0",
+  "typer>=0.12",
 ]
 
 [project.optional-dependencies]
@@ -56,9 +58,8 @@ Documentation = "https://heig-tin-info.github.io/baygon/"
 Source = "https://github.com/heig-tin-info/baygon"
 Issues = "https://github.com/heig-tin-info/baygon/issues"
 
-# Console entry points (disabled until the CLI is ready)
-#[project.scripts]
-#baygon = "baygon.cli:main"
+[project.scripts]
+baygon = "baygon.cli:run"
 
 [tool.hatch.build]
 # src/ layout
